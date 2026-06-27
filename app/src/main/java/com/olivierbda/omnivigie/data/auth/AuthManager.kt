@@ -11,11 +11,12 @@ import android.util.Log
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
+import com.olivierbda.omnivigie.BuildConfig
 import kotlinx.coroutines.tasks.await
 
 class AuthManager(private val context: Context) {
     private val credentialManager = CredentialManager.create(context)
-    private val WEB_CLIENT_ID = "306370227717-qo34en5l4ab9uj9q07efogiuiu3besbt.apps.googleusercontent.com"
+    private val WEB_CLIENT_ID = BuildConfig.WEB_CLIENT_ID
     private val GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 
     suspend fun signIn(activity: Activity): GoogleIdTokenCredential? {
