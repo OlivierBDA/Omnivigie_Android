@@ -26,16 +26,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import com.olivierbda.omnivigie.ui.theme.*
 import com.olivierbda.omnivigie.ui.viewmodel.HomeViewModel
+import android.app.Activity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     var activeTab by remember { mutableStateOf(0) }
     val articles by viewModel.articles.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -139,7 +143,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
             when (activeTab) {
                 0 -> DashboardTab(
                     articles = articles,
-                    onSyncClick = { viewModel.insertMockData() }
+                    syncStatus = syncStatus,
+                    onSyncClick = { viewModel.syncGmail(context as Activity) }
                 )
                 1 -> CurationTab(articles)
                 2 -> SettingsTab()
@@ -151,6 +156,7 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
 @Composable
 fun DashboardTab(
     articles: List<ArticleEntity>,
+    syncStatus: String?,
     onSyncClick: () -> Unit
 ) {
     LazyColumn(
@@ -189,6 +195,16 @@ fun DashboardTab(
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary
                     )
+                    
+                    syncStatus?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CosmicTertiary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }
