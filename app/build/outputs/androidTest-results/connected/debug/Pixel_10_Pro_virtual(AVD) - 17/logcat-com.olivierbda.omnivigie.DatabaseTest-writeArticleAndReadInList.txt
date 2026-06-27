@@ -1,2 +1,0 @@
-06-27 15:14:57.421 16888 16908 I TestRunner: started: writeArticleAndReadInList(com.olivierbda.omnivigie.DatabaseTest)
-06-27 15:14:57.471 16888 16908 I TestRunner: finished: writeArticleAndReadInList(com.olivierbda.omnivigie.DatabaseTest)

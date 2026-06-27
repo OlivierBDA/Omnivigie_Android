@@ -1,3 +1,0 @@
-com.olivierbda.omnivigie
-string app_name
-style Theme_Omnivigie

@@ -1,5 +1,0 @@
-com.olivierbda.omnivigie.test.app-updated_navigation_xml-0 C:\Workplace\Dev\Omnivigie_Android\app\build\generated\updated_navigation_xml\debugAndroidTest
-com.olivierbda.omnivigie.test.app-packageDebugAndroidTestResources-1 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\incremental\debugAndroidTest\packageDebugAndroidTestResources\merged.dir
-com.olivierbda.omnivigie.test.app-packageDebugAndroidTestResources-2 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\incremental\debugAndroidTest\packageDebugAndroidTestResources\stripped.dir
-com.olivierbda.omnivigie.test.app-debugAndroidTest-3 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
-gradleHome-0 C:\Users\dhisa\.gradle

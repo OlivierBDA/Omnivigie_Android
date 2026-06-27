@@ -1,7 +1,0 @@
-com.olivierbda.omnivigie.app-updated_navigation_xml-0 C:\Workplace\Dev\Omnivigie_Android\app\build\generated\updated_navigation_xml\debug
-com.olivierbda.omnivigie.app-packageDebugResources-1 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.olivierbda.omnivigie.app-packageDebugResources-2 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.olivierbda.omnivigie.app-debug-3 C:\Workplace\Dev\Omnivigie_Android\app\build\intermediates\merged_res\debug\mergeDebugResources
-com.olivierbda.omnivigie.app-debug-4 C:\Workplace\Dev\Omnivigie_Android\app\src\debug\res
-com.olivierbda.omnivigie.app-main-5 C:\Workplace\Dev\Omnivigie_Android\app\src\main\res
-gradleHome-0 C:\Users\dhisa\.gradle
