@@ -1,0 +1,2 @@
+06-27 15:14:57.311 16888 16908 I TestRunner: started: writeEmailAndReadInList(com.olivierbda.omnivigie.DatabaseTest)
+06-27 15:14:57.414 16888 16908 I TestRunner: finished: writeEmailAndReadInList(com.olivierbda.omnivigie.DatabaseTest)

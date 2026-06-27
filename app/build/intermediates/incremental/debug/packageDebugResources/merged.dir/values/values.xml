@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Omnivigie</string>
+    <style name="Theme.Omnivigie" parent="Theme.Material3.DayNight.NoActionBar">
+        
+        <item name="android:statusBarColor">#120c1f</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
