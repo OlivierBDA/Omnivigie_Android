@@ -2,25 +2,30 @@ package com.olivierbda.omnivigie.data.repository
 
 import android.util.Base64
 import android.util.Log
+import com.olivierbda.omnivigie.data.extraction.ArticleExtractor
+import com.olivierbda.omnivigie.data.local.dao.ArticleDao
 import com.olivierbda.omnivigie.data.local.dao.EmailDao
 import com.olivierbda.omnivigie.data.local.entities.EmailEntity
 import com.olivierbda.omnivigie.data.remote.GmailService
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 
-class GmailRepository(private val emailDao: EmailDao) {
+class GmailRepository(
+    private val emailDao: EmailDao,
+    private val articleDao: ArticleDao
+) {
     private val retrofit = Retrofit.Builder()
         .baseUrl("https://gmail.googleapis.com/")
         .addConverterFactory(GsonConverterFactory.create())
         .build()
 
     private val gmailService = retrofit.create(GmailService::class.java)
+    private val articleExtractor = ArticleExtractor()
 
     suspend fun syncEmails(accessToken: String, dateFilter: String): Int {
         var count = 0
         try {
             val authHeader = "Bearer $accessToken"
-            // Example query: "from:dan@tldrnewsletter.com after:2026/06/24"
             val query = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:$dateFilter"
             
             val response = gmailService.listMessages(authHeader, query = query)
@@ -31,7 +36,16 @@ class GmailRepository(private val emailDao: EmailDao) {
                 if (existing == null) {
                     val msg = gmailService.getMessage(authHeader, id = msgSummary.id)
                     val emailEntity = mapToEntity(msg)
+                    
+                    // Save email
                     emailDao.insertEmail(emailEntity)
+                    
+                    // Extract and save articles
+                    val articles = articleExtractor.extractArticles(emailEntity)
+                    if (articles.isNotEmpty()) {
+                        articleDao.insertArticles(articles)
+                    }
+                    
                     count++
                 }
             }
@@ -47,7 +61,6 @@ class GmailRepository(private val emailDao: EmailDao) {
         val sender = headers.find { it.name == "From" }?.value ?: "Unknown"
         val receivedDate = msg.internalDate ?: System.currentTimeMillis()
         
-        // Find HTML part
         val htmlBody = findHtmlPart(msg.payload) ?: ""
         
         return EmailEntity(
@@ -63,7 +76,11 @@ class GmailRepository(private val emailDao: EmailDao) {
         if (payload == null) return null
         
         if (payload.mimeType == "text/html" && payload.body?.data != null) {
-            return String(Base64.decode(payload.body.data, Base64.URL_SAFE))
+            return try {
+                String(Base64.decode(payload.body.data, Base64.URL_SAFE))
+            } catch (e: Exception) {
+                ""
+            }
         }
         
         payload.parts?.forEach { part ->

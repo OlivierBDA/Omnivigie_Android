@@ -24,7 +24,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val emailDao = db.emailDao()
     
     private val authManager = AuthManager(application)
-    private val gmailRepository = GmailRepository(emailDao)
+    private val gmailRepository = GmailRepository(emailDao, articleDao)
 
     val articles: StateFlow<List<ArticleEntity>> = articleDao.getAllArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
