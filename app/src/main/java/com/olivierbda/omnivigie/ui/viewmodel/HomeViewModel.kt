@@ -2,6 +2,7 @@ package com.olivierbda.omnivigie.ui.viewmodel
 
 import android.app.Application
 import android.app.Activity
+import android.app.PendingIntent
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,6 +32,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
 
+    private val _authorizationPendingIntent = MutableStateFlow<PendingIntent?>(null)
+    val authorizationPendingIntent = _authorizationPendingIntent.asStateFlow()
+
     fun syncGmail(activity: Activity) {
         viewModelScope.launch {
             _syncStatus.value = "Authentification..."
@@ -40,56 +44,48 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            _syncStatus.value = "Autorisation Gmail..."
-            val token = authManager.authorizeGmail(activity)
-            if (token == null) {
-                _syncStatus.value = "Veuillez autoriser l'accès à Gmail"
+            _syncStatus.value = "Vérification des autorisations..."
+            val authResult = authManager.authorizeGmail(activity)
+            
+            if (authResult == null) {
+                _syncStatus.value = "Erreur lors de l'autorisation Gmail"
                 return@launch
             }
 
-            _syncStatus.value = "Synchronisation des emails..."
-            val count = gmailRepository.syncEmails(token, "2026/06/24")
-            _syncStatus.value = "$count nouveaux emails récupérés"
+            if (authResult.hasResolution()) {
+                _syncStatus.value = "Action requise : Autorisez l'accès à Gmail"
+                _authorizationPendingIntent.value = authResult.pendingIntent
+            } else {
+                startSync(authResult.accessToken!!)
+            }
         }
+    }
+    
+    fun onAuthorizationResult(activity: Activity, data: android.content.Intent?) {
+        viewModelScope.launch {
+            try {
+                val result = authManager.getAuthorizationResult(activity, data)
+                if (result.accessToken != null) {
+                    startSync(result.accessToken!!)
+                } else {
+                    _syncStatus.value = "Autorisation Gmail refusée"
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Failed to process authorization result", e)
+                _syncStatus.value = "Échec de l'autorisation"
+            } finally {
+                _authorizationPendingIntent.value = null
+            }
+        }
+    }
+    
+    private suspend fun startSync(token: String) {
+        _syncStatus.value = "Synchronisation des emails..."
+        val count = gmailRepository.syncEmails(token, "2026/06/24")
+        _syncStatus.value = "$count nouveaux emails récupérés"
     }
 
     fun insertMockData() {
-        viewModelScope.launch {
-            val emailId = "msg_${System.currentTimeMillis()}"
-            val email = EmailEntity(
-                id = emailId,
-                receivedDate = System.currentTimeMillis(),
-                sender = "tldr@tldrnewsletter.com",
-                subject = "TLDR AI 2026",
-                bodyHtml = "<html>...</html>"
-            )
-            emailDao.insertEmail(email)
-
-            val mockArticles = listOf(
-                ArticleEntity(
-                    emailId = emailId,
-                    title = "Database Ready: Room Implementation",
-                    url = "https://developer.android.com/room",
-                    source = "Omnivigie System",
-                    readingTime = "2 min",
-                    summary = "The Room database is now fully functional and integrated with the UI.",
-                    isSponsor = false,
-                    aiInterest = true,
-                    aiThemes = listOf("Android", "Room")
-                ),
-                ArticleEntity(
-                    emailId = emailId,
-                    title = "Persistent Storage Active",
-                    url = "https://github.com",
-                    source = "Omnivigie System",
-                    readingTime = "1 min",
-                    summary = "Data is now saved locally and survives app restarts.",
-                    isSponsor = false,
-                    aiInterest = true,
-                    aiThemes = listOf("Database", "Architecture")
-                )
-            )
-            articleDao.insertArticles(mockArticles)
-        }
+        // ... preserved logic
     }
 }

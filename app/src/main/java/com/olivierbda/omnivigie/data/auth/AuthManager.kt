@@ -9,6 +9,7 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import android.app.Activity
 import android.util.Log
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
+import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.common.api.Scope
 import com.olivierbda.omnivigie.BuildConfig
@@ -20,6 +21,8 @@ class AuthManager(private val context: Context) {
     private val GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 
     suspend fun signIn(activity: Activity): GoogleIdTokenCredential? {
+        Log.d("AuthManager", "Starting signIn flow with ClientID: $WEB_CLIENT_ID")
+        
         val googleIdOption = GetGoogleIdOption.Builder()
             .setFilterByAuthorizedAccounts(false)
             .setServerClientId(WEB_CLIENT_ID)
@@ -33,18 +36,25 @@ class AuthManager(private val context: Context) {
         return try {
             val result = credentialManager.getCredential(activity, request)
             val credential = result.credential
-            if (credential is GoogleIdTokenCredential) {
-                credential
-            } else {
+            
+            Log.d("AuthManager", "Credential type received: ${credential::class.java.simpleName}")
+            
+            try {
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                Log.d("AuthManager", "Successfully parsed GoogleIdToken for: ${googleIdTokenCredential.id}")
+                googleIdTokenCredential
+            } catch (e: Exception) {
+                Log.e("AuthManager", "Failed to parse GoogleIdToken from credential data: ${e.message}")
                 null
             }
         } catch (e: Exception) {
-            Log.e("AuthManager", "Sign-in failed", e)
+            Log.e("AuthManager", "Sign-in exception: ${e.message}", e)
             null
         }
     }
 
-    suspend fun authorizeGmail(activity: Activity): String? {
+    suspend fun authorizeGmail(activity: Activity): AuthorizationResult? {
+        Log.d("AuthManager", "Requesting Gmail authorization...")
         val requestedScopes = listOf(Scope(GMAIL_SCOPE))
         val authorizationRequest = AuthorizationRequest.builder()
             .setRequestedScopes(requestedScopes)
@@ -54,21 +64,23 @@ class AuthManager(private val context: Context) {
             val result = Identity.getAuthorizationClient(activity)
                 .authorize(authorizationRequest)
                 .await()
-            
-            if (result.hasResolution() && result.pendingIntent != null) {
-                // If resolution is required, the UI component will have to handle the intent
-                // We'll return null here and let the caller handle the resolution
-                null
-            } else {
-                result.accessToken
-            }
+            result
         } catch (e: Exception) {
-            Log.e("AuthManager", "Authorization failed", e)
+            Log.e("AuthManager", "Gmail Authorization exception: ${e.message}", e)
             null
         }
     }
+    
+    fun getAuthorizationResult(activity: Activity, data: android.content.Intent?): AuthorizationResult {
+        return Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data)
+    }
 
     suspend fun signOut() {
-        credentialManager.clearCredentialState(ClearCredentialStateRequest())
+        Log.d("AuthManager", "Signing out...")
+        try {
+            credentialManager.clearCredentialState(ClearCredentialStateRequest())
+        } catch (e: Exception) {
+            Log.e("AuthManager", "Sign-out failed", e)
+        }
     }
 }
