@@ -22,13 +22,13 @@ class GmailRepository(
     private val gmailService = retrofit.create(GmailService::class.java)
     private val articleExtractor = ArticleExtractor()
 
-    suspend fun syncEmails(accessToken: String, dateFilter: String): Int {
+    suspend fun syncEmails(accessToken: String, fullQuery: String): Int {
         var count = 0
         try {
             val authHeader = "Bearer $accessToken"
-            val query = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:$dateFilter"
+            Log.d("GmailRepository", "Syncing with query: $fullQuery")
             
-            val response = gmailService.listMessages(authHeader, query = query)
+            val response = gmailService.listMessages(authHeader, query = fullQuery)
             val messages = response.messages ?: emptyList()
 
             for (msgSummary in messages) {
@@ -37,10 +37,8 @@ class GmailRepository(
                     val msg = gmailService.getMessage(authHeader, id = msgSummary.id)
                     val emailEntity = mapToEntity(msg)
                     
-                    // Save email
                     emailDao.insertEmail(emailEntity)
                     
-                    // Extract and save articles
                     val articles = articleExtractor.extractArticles(emailEntity)
                     if (articles.isNotEmpty()) {
                         articleDao.insertArticles(articles)

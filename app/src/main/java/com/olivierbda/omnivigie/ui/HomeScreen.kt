@@ -574,9 +574,9 @@ fun ArticleCard(article: ArticleEntity) {
 }
 
 @Composable
-fun SettingsTab() {
+fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
+    val gmailFilter by viewModel.gmailFilter.collectAsState()
     var geminiKey by remember { mutableStateOf("••••••••••••••••••••••••") }
-    var emailFilterQuery by remember { mutableStateOf("from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com") }
 
     LazyColumn(
         modifier = Modifier
@@ -626,8 +626,8 @@ fun SettingsTab() {
                     )
 
                     OutlinedTextField(
-                        value = emailFilterQuery,
-                        onValueChange = { emailFilterQuery = it },
+                        value = gmailFilter,
+                        onValueChange = { viewModel.updateGmailFilter(it) },
                         label = { Text("Filtre de recherche Gmail") },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(

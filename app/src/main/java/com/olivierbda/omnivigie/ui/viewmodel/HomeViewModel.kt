@@ -10,11 +10,14 @@ import com.olivierbda.omnivigie.data.auth.AuthManager
 import com.olivierbda.omnivigie.data.local.OmnivigieDatabase
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import com.olivierbda.omnivigie.data.local.entities.EmailEntity
+import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 import com.olivierbda.omnivigie.data.repository.GmailRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,12 +25,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val db = OmnivigieDatabase.getDatabase(application)
     private val articleDao = db.articleDao()
     private val emailDao = db.emailDao()
+    private val settingDao = db.settingDao()
     
     private val authManager = AuthManager(application)
     private val gmailRepository = GmailRepository(emailDao, articleDao)
 
+    private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
+
     val articles: StateFlow<List<ArticleEntity>> = articleDao.getAllArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val gmailFilter: StateFlow<String> = settingDao.getSetting("gmail_filter")
+        .map { it ?: DEFAULT_FILTER }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_FILTER)
 
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
@@ -81,11 +91,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     private suspend fun startSync(token: String) {
         _syncStatus.value = "Synchronisation des emails..."
-        val count = gmailRepository.syncEmails(token, "2026/06/24")
+        val currentFilter = gmailFilter.value
+        val count = gmailRepository.syncEmails(token, currentFilter)
         _syncStatus.value = "$count nouveaux emails récupérés"
     }
 
+    fun updateGmailFilter(newFilter: String) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("gmail_filter", newFilter))
+        }
+    }
+
     fun insertMockData() {
-        // ... preserved logic
+        // preserved logic
     }
 }
