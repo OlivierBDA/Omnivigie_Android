@@ -98,7 +98,16 @@ class ArticleExtractor {
         if (title.isBlank() || title.length < 3) return false
         if (!url.startsWith("http")) return false
         
-        val excludeKeywords = listOf("unsubscribe", "view in browser", "twitter", "linkedin", "facebook", "privacy policy", "advertise")
+        val excludeKeywords = listOf(
+            "unsubscribe", 
+            "view in browser", 
+            "twitter", 
+            "linkedin", 
+            "facebook", 
+            "privacy policy", 
+            "advertise",
+            "Apply here" // Added as requested
+        )
         if (excludeKeywords.any { title.contains(it, ignoreCase = true) }) return false
         
         return true
