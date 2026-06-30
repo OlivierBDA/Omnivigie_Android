@@ -10,41 +10,62 @@ class ArticleExtractor {
         val doc = Jsoup.parse(email.bodyHtml)
         val articles = mutableListOf<ArticleEntity>()
 
-        // TLDR strategy: Find all <a> tags
-        val links = doc.select("a")
+        // Strategy based on user feedback and sample analysis:
+        // 1. Find all <a> tags that are inside <strong> tags (titles are bold links)
+        // 2. Title must end with something in parentheses (e.g., "(1 minute read)", "(Sponsor)")
+        // 3. Summary is the text in the next available block (usually after some <br> or in a sibling span/div)
         
-        for (link in links) {
-            val title = link.text().trim()
-            val rawUrl = link.attr("href")
-            val url = cleanUrl(rawUrl)
+        val boldLinks = doc.select("strong a, a strong")
+        
+        for (element in boldLinks) {
+            val titleElement = if (element.tagName() == "strong") element.selectFirst("a") else element
+            if (titleElement == null) continue
             
-            if (isValidArticle(title, url)) {
-                val parent = link.parent() ?: continue
-                val textContent = parent.text()
-                
-                // Extract reading time (e.g. "5 minute read")
-                val readingTimeRegex = """(\d+\s+min(ute)?\s+read)""".toRegex(RegexOption.IGNORE_CASE)
-                val readingTimeMatch = readingTimeRegex.find(textContent)
-                val readingTime = readingTimeMatch?.value ?: "N/A"
-                
-                // Summary extraction
-                var summary = textContent.replace(title, "").trim()
-                if (readingTime != "N/A") {
-                    summary = summary.replace(readingTime, "").trim()
-                }
-                summary = summary.removePrefix("(").removeSuffix(")").trim()
+            val fullTitleText = titleElement.text().trim()
+            val url = cleanUrl(titleElement.attr("href"))
+            
+            // Check if title ends with parentheses (Reading time or Sponsor)
+            val parenthesesRegex = """\(.*?\)$""".toRegex()
+            if (!parenthesesRegex.containsMatchIn(fullTitleText)) continue
 
-                val isSponsor = title.contains("Sponsor", ignoreCase = true) || 
-                               textContent.contains("Sponsor", ignoreCase = true)
+            // Split title and metadata (reading time/sponsor)
+            val metadata = parenthesesRegex.find(fullTitleText)?.value ?: ""
+            val cleanTitle = fullTitleText.replace(metadata, "").trim()
+            
+            // Extraction of reading time and sponsor flag
+            val readingTime = if (metadata.contains("read", ignoreCase = true)) {
+                metadata.removePrefix("(").removeSuffix(")")
+            } else {
+                "N/A"
+            }
+            val isSponsor = metadata.contains("Sponsor", ignoreCase = true)
 
+            // Find summary: It's usually in a following <span> or after <br>s within the same container
+            // In the provided sample, TLDR often uses:
+            // <a><strong>Title (Time)</strong></a><br><br><span>Summary</span>
+            
+            var summary = ""
+            
+            // Look for the summary in siblings
+            var nextSibling = element.parent()?.nextElementSibling() 
+            if (nextSibling == null) {
+                // Try to find text after the link in the same parent if structure varies
+                val parentText = element.parent()?.text() ?: ""
+                summary = parentText.replace(fullTitleText, "").trim()
+            } else {
+                summary = nextSibling.text().trim()
+            }
+            
+            // Final validation: Avoid navigation links
+            if (isValidArticle(cleanTitle, url)) {
                 articles.add(
                     ArticleEntity(
                         emailId = email.id,
-                        title = title,
+                        title = cleanTitle,
                         url = url,
                         source = email.sender,
                         readingTime = readingTime,
-                        summary = summary.take(500),
+                        summary = summary.take(1000),
                         isSponsor = isSponsor
                     )
                 )
@@ -58,7 +79,7 @@ class ArticleExtractor {
         if (title.isBlank() || title.length < 5) return false
         if (!url.startsWith("http")) return false
         
-        val excludeKeywords = listOf("unsubscribe", "view in browser", "twitter", "linkedin", "facebook", "privacy policy")
+        val excludeKeywords = listOf("unsubscribe", "view in browser", "twitter", "linkedin", "facebook", "privacy policy", "advertise")
         if (excludeKeywords.any { title.contains(it, ignoreCase = true) }) return false
         
         return true
@@ -66,7 +87,6 @@ class ArticleExtractor {
 
     private fun cleanUrl(url: String): String {
         return try {
-            // Manual cleaning to avoid Android Uri dependency in unit tests
             if (url.contains("?")) {
                 url.substringBefore("?")
             } else {
