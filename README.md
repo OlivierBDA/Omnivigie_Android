@@ -1,65 +1,65 @@
 # Omnivigie Android (L'Assistant Veille sur Mobile)
 
-Omnivigie Android est la migration mobile de l'assistant de veille technologique automatisé Omnivigie (initialement développé en Python). Cette application native Android (Kotlin/Jetpack Compose) est optimisée pour s'exécuter directement sur un Google Pixel 10 Pro.
+Omnivigie Android est la migration mobile de l'assistant de veille technologique automatisé Omnivigie (initialement en Python). Cette application native Android (Kotlin/Jetpack Compose) est optimisée pour s'exécuter directement sur un Google Pixel 10 Pro.
 
-L'objectif de l'application est de récupérer vos newsletters de veille directement depuis votre boîte Gmail, d'en extraire les articles, d'évaluer leur pertinence sémantique via l'IA de Google Gemini (qualification automatique), puis de créer des carnets thématiques et de générer des podcasts d'analyse (Deep Dive) directement dans Google NotebookLM.
+L'objectif est de récupérer les newsletters de veille (TLDR) depuis Gmail, d'extraire les articles, d'évaluer leur pertinence via Gemini (qualification automatique), puis de générer des podcasts d'analyse via Google NotebookLM.
 
 ---
 
 ## 🏗️ Architecture Technique
 
-L'application respecte les principes de la **Clean Architecture** avec une séparation en couches et un pattern **MVVM** (Model-View-ViewModel) :
-*   **Couche UI** : Jetpack Compose avec un thème cosmique sombre premium (palette violette et indigo vibrante, typographies modernes).
-*   **Couche Domain** : Contient la logique métier, les modèles de données de veille et les use cases.
+L'application respecte les principes de la **Clean Architecture** et du pattern **MVVM** :
+*   **Couche UI** : Jetpack Compose avec un thème "Cosmic Dark" (Palette violette/indigo).
 *   **Couche Data** : 
-    *   **Room DB** : Base de données locale pour persister les emails, les articles extraits, et les réglages utilisateur.
-    *   **Retrofit / OkHttp** : Client de communication HTTP pour Gmail API et l'API RPC de NotebookLM.
-    *   **Google AI Client SDK** : Appels directs à l'API Gemini pour la qualification IA.
-    *   **WorkManager** : Tâches planifiées en arrière-plan pour automatiser le pipeline de veille chaque matin.
+    *   **Room DB** : Stockage local des emails, articles et réglages.
+    *   **Retrofit / OkHttp** : Client pour l'API Gmail.
+    *   **Credential Manager** : Authentification Google "One Tap".
+    *   **Jsoup** : Parsing HTML complexe pour l'extraction d'articles.
 
 ---
 
 ## 📊 État d'Avancement des Fonctionnalités
 
-### 1. Fondations & Interface Visuelle
-*   **Initialisation du projet & Setup Gradle** : **[Terminé]**
-    *   Configuration Kotlin DSL, Gradle 8.2, SDK cible 34.
-    *   Dépendances configurées (Compose, Room, Retrofit, Gemini, Jsoup, WorkManager, Google Auth).
-*   **Thème sombre cosmique** : **[Terminé]**
-    *   Définition de la palette de couleurs, des styles typographiques et de la gestion de la barre de statut.
-*   **Squelette de l'Interface utilisateur (Jetpack Compose)** : **[Terminé]**
-    *   Navigation par onglets (Dashboard, Curation, Paramètres) avec listes et widgets factices.
+### 1. Fondations & Interface [Terminé]
+*   Setup Gradle 9.4, AGP 9.2, SDK 37 (Android 15).
+*   Thème cosmique sombre et navigation par onglets (Dashboard, Curation, Paramètres).
 
-### 2. Persistance Locale
-*   **Schéma et Entités Room (Email, Article)** : **[En cours]**
-    *   Modélisation des tables `emails` et `articles`.
-*   **DAOs & Base de données locale** : **[À faire]**
-    *   Implémentation des requêtes de persistance, de filtrage par thème et de mise à jour des statuts.
+### 2. Persistance Locale (Room) [Terminé]
+*   Entités `EmailEntity`, `ArticleEntity` et `SettingEntity`.
+*   Support des `Flow` pour une UI réactive.
 
-### 3. Pipeline d'Acquisition & Extraction
-*   **Connexion OAuth 2.0 Gmail** : **[À faire]**
-    *   Intégration du Google Sign-In / Credential Manager et des permissions Gmail Readonly.
-*   **Récupération des emails (Gmail API)** : **[À faire]**
-    *   Requête de recherche des emails TLDR non encore téléchargés.
-*   **Parser HTML (Jsoup)** : **[À faire]**
-    *   Extraction des métadonnées d'articles (titres, liens nettoyés sans tracking, temps de lecture, résumés, détection des sponsors).
+### 3. Acquisition Gmail [Terminé]
+*   Authentification via **Credential Manager** et **AuthorizationClient** (OAuth 2.0).
+*   Récupération filtrée par requête Gmail dynamique (paramétrable dans l'UI).
+*   Extraction du corps HTML avec décodage Base64.
 
-### 4. Qualification Sémantique par l'IA
-*   **Intégration du SDK Google AI** : **[À faire]**
-    *   Appels à Gemini Flash avec gestion sécurisée de la clé d'API.
-*   **Filtre Métier & Prompting Structuré** : **[À faire]**
-    *   Exclusion automatique des sponsors et articles courts, et qualification des articles restants sous format JSON structuré avec tags issus de `themes.json` et critères de `criteria.md`.
+### 4. Extraction & Structuration (Jsoup) [Terminé]
+*   Portage de la logique Python pour découper les emails en articles structurés.
+*   Nettoyage automatique des URLs (suppression des UTM/tracking).
+*   Détection des sponsors et temps de lecture.
+*   Filtres d'exclusion de mots-clés (ex: "Apply here").
 
-### 5. Intégration Google NotebookLM
-*   **Authentification par WebView** : **[À faire]**
-    *   Capture des cookies de session Google et extraction automatique du token CSRF (`SNlM0e`) et du Session ID (`FdrFJe`).
-*   **Client API RPC (Retrofit)** : **[À faire]**
-    *   Création de carnet (`CREATE_NOTEBOOK`) et ajout de sources (`ADD_SOURCE`) via requêtes HTTP `batchexecute`.
-*   **Génération de Podcast Audio** : **[À faire]**
-    *   Déclenchement du Deep Dive Audio avec instructions personnalisées.
+### 5. Qualification IA (Gemini) [En cours]
+*   Intégration prévue du SDK Google AI (Gemini 1.5 Flash).
 
-### 6. Automatisation & Notifications
-*   **Planificateur d'arrière-plan (WorkManager)** : **[À faire]**
-    *   Exécution nocturne ou quotidienne automatique du pipeline complet.
-*   **Notifications Système** : **[À faire]**
-    *   Alerte l'utilisateur sur son Pixel 10 Pro lorsque de nouveaux articles pertinents ont été qualifiés.
+---
+
+## 🛠️ Éléments Techniques Structurants (Pour future session)
+
+### Configuration Requise
+*   **local.properties** : Doit contenir `WEB_CLIENT_ID` (OAuth Web) et `GEMINI_API_KEY`.
+*   **Google Cloud Console** : L'app nécessite un Client ID **Android** (lié au SHA-1 de debug) ET un Client ID **Web**.
+*   **Scopes OAuth** : `https://www.googleapis.com/auth/gmail.readonly` doit être autorisé.
+
+### Logique de Parsing (ArticleExtractor.kt)
+Le parsing est basé sur la structure des newsletters TLDR :
+- Itération sur les blocs `div.text-block`.
+- Identification du titre via `a > strong`.
+- Résumé extrait depuis les `span` ayant un style `font-family`.
+- Nettoyage des paramètres d'URL via une logique manuelle pour éviter les dépendances Android dans les tests unitaires.
+
+### Flux de Données
+1. `HomeViewModel` déclenche la sync.
+2. `AuthManager` gère le jeton (et la résolution de consentement si besoin via `MainActivity`).
+3. `GmailRepository` télécharge l'email -> sauvegarde dans Room -> déclenche `ArticleExtractor` -> sauvegarde les articles dans Room.
+4. L'UI (Dashboard/Curation) observe les tables via Flow et se met à jour automatiquement.
