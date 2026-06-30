@@ -17,4 +17,7 @@ interface EmailDao {
 
     @Delete
     suspend fun deleteEmail(email: EmailEntity)
+
+    @Query("DELETE FROM emails")
+    suspend fun deleteAllEmails()
 }

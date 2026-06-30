@@ -639,6 +639,17 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
                             unfocusedTextColor = TextPrimary
                         )
                     )
+
+                    Button(
+                        onClick = { viewModel.clearData() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SystemRed),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.DeleteSweep, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Remise à zéro de la base", color = Color.White)
+                    }
                 }
             }
         }

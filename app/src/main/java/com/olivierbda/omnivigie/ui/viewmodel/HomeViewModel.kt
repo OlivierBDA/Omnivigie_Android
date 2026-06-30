@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -102,7 +101,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun insertMockData() {
-        // preserved logic
+    fun clearData() {
+        viewModelScope.launch {
+            try {
+                articleDao.deleteAllArticles()
+                emailDao.deleteAllEmails()
+                _syncStatus.value = "Base de données réinitialisée"
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Failed to clear database", e)
+                _syncStatus.value = "Erreur lors de la réinitialisation"
+            }
+        }
     }
 }
