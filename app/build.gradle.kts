@@ -16,6 +16,8 @@ android {
         localProperties.load(localPropertiesFile.inputStream())
     }
     val webClientId = localProperties.getProperty("WEB_CLIENT_ID") ?: ""
+    val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
+    val geminiModel = localProperties.getProperty("GEMINI_MODEL") ?: "gemini-1.5-flash"
 
     defaultConfig {
         applicationId = "com.olivierbda.omnivigie"
@@ -25,6 +27,8 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "WEB_CLIENT_ID", "\"$webClientId\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+        buildConfigField("String", "GEMINI_MODEL", "\"$geminiModel\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

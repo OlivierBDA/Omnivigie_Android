@@ -39,8 +39,11 @@ L'application respecte les principes de la **Clean Architecture** et du pattern 
 *   Détection des sponsors et temps de lecture.
 *   Filtres d'exclusion de mots-clés (ex: "Apply here").
 
-### 5. Qualification IA (Gemini) [En cours]
-*   Intégration prévue du SDK Google AI (Gemini 1.5 Flash).
+### 5. Qualification IA (Gemini) [Terminé]
+*   Intégration du SDK Google AI (Gemini 2.0 Flash Lite).
+*   Pré-filtrage intelligent : détection automatique des publicités (N/A) et articles courts (< 5 min).
+*   Prompt structuré pour l'analyse de pertinence, l'attribution de thèmes et la génération d'explications.
+*   Système de curation visuel avec indicateurs de statut et nettoyage automatique.
 
 ---
 

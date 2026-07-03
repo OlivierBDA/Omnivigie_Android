@@ -12,10 +12,13 @@ import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import com.olivierbda.omnivigie.data.local.entities.EmailEntity
 import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 import com.olivierbda.omnivigie.data.repository.GmailRepository
+import com.olivierbda.omnivigie.data.repository.GeminiRepository
+import com.olivierbda.omnivigie.domain.usecase.QualifyArticlesUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -28,6 +31,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     private val authManager = AuthManager(application)
     private val gmailRepository = GmailRepository(emailDao, articleDao)
+    private val geminiRepository = GeminiRepository()
+    private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, geminiRepository)
 
     private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
 
@@ -110,6 +115,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Failed to clear database", e)
                 _syncStatus.value = "Erreur lors de la réinitialisation"
+            }
+        }
+    }
+
+    fun qualifyArticles() {
+        viewModelScope.launch {
+            qualifyArticlesUseCase.execute().collectLatest { status ->
+                _syncStatus.value = status
+            }
+        }
+    }
+
+    fun cleanupArticles() {
+        viewModelScope.launch {
+            try {
+                articleDao.cleanupArticles()
+                _syncStatus.value = "Nettoyage terminé"
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Cleanup failed", e)
+                _syncStatus.value = "Erreur lors du nettoyage"
             }
         }
     }

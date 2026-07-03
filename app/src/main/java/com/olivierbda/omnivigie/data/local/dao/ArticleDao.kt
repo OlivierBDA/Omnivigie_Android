@@ -21,6 +21,12 @@ interface ArticleDao {
     @Query("SELECT * FROM articles WHERE emailId = :emailId")
     suspend fun getArticlesByEmail(emailId: String): List<ArticleEntity>
 
+    @Query("SELECT * FROM articles WHERE isQualified = 0 AND isSponsor = 0")
+    suspend fun getUnqualifiedArticles(): List<ArticleEntity>
+
+    @Query("DELETE FROM articles WHERE aiInterest = 0 OR isSentToNotebook = 1 OR aiExplanation LIKE '%trop court%' OR aiExplanation LIKE '%Publicité%'")
+    suspend fun cleanupArticles()
+
     @Update
     suspend fun updateArticle(article: ArticleEntity)
 

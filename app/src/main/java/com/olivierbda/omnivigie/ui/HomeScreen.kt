@@ -144,10 +144,14 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
                 0 -> DashboardTab(
                     articles = articles,
                     syncStatus = syncStatus,
-                    onSyncClick = { viewModel.syncGmail(context as Activity) }
+                    onSyncClick = { viewModel.syncGmail(context as Activity) },
+                    onQualifyClick = { viewModel.qualifyArticles() }
                 )
-                1 -> CurationTab(articles)
-                2 -> SettingsTab()
+                1 -> CurationTab(
+                    articles = articles,
+                    onCleanupClick = { viewModel.cleanupArticles() }
+                )
+                2 -> SettingsTab(viewModel)
             }
         }
     }
@@ -157,7 +161,8 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
 fun DashboardTab(
     articles: List<ArticleEntity>,
     syncStatus: String?,
-    onSyncClick: () -> Unit
+    onSyncClick: () -> Unit,
+    onQualifyClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -268,7 +273,7 @@ fun DashboardTab(
                 QuickActionButton(
                     title = "Qualifier (LLM)",
                     icon = Icons.Default.CheckCircle,
-                    onClick = {},
+                    onClick = onQualifyClick,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -431,7 +436,10 @@ fun StatCard(
 }
 
 @Composable
-fun CurationTab(articles: List<ArticleEntity>) {
+fun CurationTab(
+    articles: List<ArticleEntity>,
+    onCleanupClick: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -448,11 +456,21 @@ fun CurationTab(articles: List<ArticleEntity>) {
                 color = TextAccent,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                text = "${articles.size} en attente",
-                style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary
-            )
+            
+            IconButton(
+                onClick = onCleanupClick,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(CosmicSurfaceVariant)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoDelete,
+                    contentDescription = "Cleanup",
+                    tint = SystemRed,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
         }
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -509,8 +527,17 @@ fun ArticleCard(article: ArticleEntity) {
             Text(
                 text = article.title,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = TextPrimary
+                color = if (article.aiInterest == true) CosmicTertiary else TextPrimary
             )
+            
+            if (article.aiExplanation != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = article.aiExplanation ?: "",
+                    style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
+                    color = CosmicPrimary
+                )
+            }
             
             Spacer(modifier = Modifier.height(4.dp))
             
@@ -536,8 +563,36 @@ fun ArticleCard(article: ArticleEntity) {
                 )
                 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    // Status Icon
+                    val (statusIcon, statusColor) = when {
+                        article.isSentToNotebook -> Icons.Default.CheckCircle to SystemGreen
+                        !article.isQualified -> Icons.Default.QuestionMark to TextSecondary
+                        article.aiExplanation?.contains("Publicité", ignoreCase = true) == true -> Icons.Default.Block to SystemRed
+                        article.aiExplanation?.contains("trop court", ignoreCase = true) == true -> Icons.Default.HourglassEmpty to CosmicTertiary
+                        article.aiInterest == true -> Icons.Default.PriorityHigh to CosmicTertiary
+                        else -> Icons.Default.Close to SystemRed
+                    }
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(CosmicSurfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = "Status",
+                            tint = statusColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(4.dp))
+
                     IconButton(
                         onClick = {},
                         modifier = Modifier
