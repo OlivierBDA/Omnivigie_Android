@@ -19,6 +19,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ui.auth.NotebookAuthActivity"
+            android:label="Connexion NotebookLM"
+            android:theme="@style/Theme.Omnivigie" />
     </application>
 
 </manifest>

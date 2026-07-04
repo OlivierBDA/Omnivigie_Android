@@ -26,12 +26,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Activity
+import android.content.Intent
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import com.olivierbda.omnivigie.ui.theme.*
 import com.olivierbda.omnivigie.ui.viewmodel.HomeViewModel
-import android.app.Activity
+import com.olivierbda.omnivigie.ui.auth.NotebookAuthActivity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,7 +44,22 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     var activeTab by remember { mutableStateOf(0) }
     val articles by viewModel.articles.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
+    val notebookStatus by viewModel.notebookStatus.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Refresh notebook status when returning to app
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshNotebookStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -144,8 +164,12 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
                 0 -> DashboardTab(
                     articles = articles,
                     syncStatus = syncStatus,
+                    notebookStatus = notebookStatus,
                     onSyncClick = { viewModel.syncGmail(context as Activity) },
-                    onQualifyClick = { viewModel.qualifyArticles() }
+                    onQualifyClick = { viewModel.qualifyArticles() },
+                    onNotebookClick = {
+                        context.startActivity(Intent(context, NotebookAuthActivity::class.java))
+                    }
                 )
                 1 -> CurationTab(
                     articles = articles,
@@ -161,8 +185,10 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
 fun DashboardTab(
     articles: List<ArticleEntity>,
     syncStatus: String?,
+    notebookStatus: String,
     onSyncClick: () -> Unit,
-    onQualifyClick: () -> Unit
+    onQualifyClick: () -> Unit,
+    onNotebookClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -242,9 +268,10 @@ fun DashboardTab(
                 )
                 DiagnosticRow(
                     title = "Google NotebookLM",
-                    status = "Non Connecté (Authentification requise)",
-                    statusColor = SystemRed,
-                    icon = Icons.Default.CloudQueue
+                    status = notebookStatus,
+                    statusColor = if (notebookStatus == "Connecté") SystemGreen else SystemRed,
+                    icon = Icons.Default.CloudQueue,
+                    onClick = onNotebookClick
                 )
             }
         }
@@ -298,10 +325,13 @@ fun DiagnosticRow(
     title: String,
     status: String,
     statusColor: Color,
-    icon: ImageVector
+    icon: ImageVector,
+    onClick: (() -> Unit)? = null
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CosmicSurface)
     ) {

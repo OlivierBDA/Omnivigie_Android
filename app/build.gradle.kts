@@ -86,6 +86,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.8.5")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
 
     // Room Database
     val roomVersion = "2.8.4"
@@ -106,6 +107,9 @@ dependencies {
 
     // WorkManager (for background sync schedules)
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Security (for EncryptedSharedPreferences)
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // Google Sign-In for Gmail OAuth
     implementation("com.google.android.gms:play-services-auth:21.0.0")

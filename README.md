@@ -45,6 +45,12 @@ L'application respecte les principes de la **Clean Architecture** et du pattern 
 *   Prompt structuré pour l'analyse de pertinence, l'attribution de thèmes et la génération d'explications.
 *   Système de curation visuel avec indicateurs de statut et nettoyage automatique.
 
+### 6. Authentification NotebookLM (WebView) [Terminé]
+*   Interface WebView pour la connexion sécurisée sur `notebooklm.google.com`.
+*   Extraction automatisée des jetons CSRF (`SNlM0e`) et de session (`FdrFJe`) via injection JavaScript.
+*   Stockage chiffré des identifiants via `EncryptedSharedPreferences`.
+*   Vérification dynamique de l'état de la session au démarrage et au retour dans l'application.
+
 ---
 
 ## 🛠️ Éléments Techniques Structurants (Pour future session)
