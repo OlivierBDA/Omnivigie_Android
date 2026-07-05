@@ -33,15 +33,17 @@ class NotebookLmRepository(
                 put(JSONArray())  
             }
 
-            // Encapsulation dans le format RPC global  
-            val fReq = JSONArray().apply {  
-                val outerArray = JSONArray().apply {  
-                    put("CCqFvf")  
-                    put(innerRequest.toString())  
-                    put(JSONObject.NULL)  
-                    put("generic")  
-                }  
-                put(JSONArray().put(outerArray))  
+            // Encapsulation dans le format RPC global
+            val outerArray = JSONArray().apply {
+                put("CCqFvf")
+                put(innerRequest.toString())
+                put(JSONObject.NULL)
+                put("generic")
+            }
+            val fReq = JSONArray().apply {
+                put(JSONArray().apply {
+                    put(outerArray)
+                })
             }.toString()
 
             val responseText = apiService.batchExecute(  
@@ -91,14 +93,16 @@ class NotebookLmRepository(
                 put(urlDetails)  
             }
 
-            val fReq = JSONArray().apply {  
-                val outerArray = JSONArray().apply {  
-                    put("izAoDd")  
-                    put(innerRequest.toString())  
-                    put(JSONObject.NULL)  
-                    put("generic")  
-                }  
-                put(JSONArray().put(outerArray))  
+            val outerArray = JSONArray().apply {
+                put("izAoDd")
+                put(innerRequest.toString())
+                put(JSONObject.NULL)
+                put("generic")
+            }
+            val fReq = JSONArray().apply {
+                put(JSONArray().apply {
+                    put(outerArray)
+                })
             }.toString()
 
             val responseText = apiService.batchExecute(  
