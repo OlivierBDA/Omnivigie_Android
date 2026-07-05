@@ -47,6 +47,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val notebookLmApiService = Retrofit.Builder()
         .baseUrl("https://notebooklm.google.com/")
         .client(OkHttpClient.Builder()
+            .addInterceptor(okhttp3.logging.HttpLoggingInterceptor().apply {
+                level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
+            })
             .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
             .readTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
             .writeTimeout(45, java.util.concurrent.TimeUnit.SECONDS)

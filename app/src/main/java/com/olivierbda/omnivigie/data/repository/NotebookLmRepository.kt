@@ -41,10 +41,14 @@ class NotebookLmRepository(
                 put("generic")
             }
             val fReq = JSONArray().apply {
-                put(JSONArray().apply {
+                val batch = JSONArray().apply {
                     put(outerArray)
-                })
+                }
+                put(batch)
             }.toString()
+
+            Log.d(TAG, "Envoi RPC CCqFvf - f.sid: ${session.fdrfje}")
+            Log.d(TAG, "Payload f.req: $fReq")
 
             val responseText = apiService.batchExecute(  
                 rpcId = "CCqFvf",  
@@ -53,6 +57,8 @@ class NotebookLmRepository(
                 csrfToken = session.snlm0e,  
                 req = fReq  
             )
+
+            Log.d(TAG, "Réponse brute NotebookLM: $responseText")
 
             val notebookId = extractIdFromResponse(responseText)  
             Log.d(TAG, "Notebook créé avec succès. ID extrait : $notebookId")  
@@ -100,10 +106,14 @@ class NotebookLmRepository(
                 put("generic")
             }
             val fReq = JSONArray().apply {
-                put(JSONArray().apply {
+                val batch = JSONArray().apply {
                     put(outerArray)
-                })
+                }
+                put(batch)
             }.toString()
+
+            Log.d(TAG, "Envoi RPC izAoDd - Source: $title")
+            Log.d(TAG, "Payload f.req: $fReq")
 
             val responseText = apiService.batchExecute(  
                 rpcId = "izAoDd",  
