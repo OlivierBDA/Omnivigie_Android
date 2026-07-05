@@ -21,10 +21,8 @@ class CreateThemedNotebookUseCase(
             return@flow
         }
 
-        // 1. Récupération des articles depuis la base
-        val pattern = "%$theme%"
-        val allArticles = articleDao.getInterestingPendingArticlesByTheme(pattern)
-        val pendingArticles = allArticles.filter { articleIds.contains(it.id) }
+        // 1. Récupération des articles par IDs directement
+        val pendingArticles = articleDao.getArticlesByIds(articleIds)
 
         if (pendingArticles.isEmpty()) {
             emit("Erreur : Les articles sélectionnés ne sont plus disponibles.")

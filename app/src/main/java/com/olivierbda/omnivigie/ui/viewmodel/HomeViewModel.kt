@@ -197,9 +197,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun createNotebook(theme: String) {
+    fun createNotebook(theme: String, selectedIds: List<Int>) {
         viewModelScope.launch {
-            val selectedIds = _selectedArticles.value.toList()
             if (selectedIds.isEmpty()) {
                 _syncStatus.value = "Erreur : Aucun article sélectionné"
                 return@launch

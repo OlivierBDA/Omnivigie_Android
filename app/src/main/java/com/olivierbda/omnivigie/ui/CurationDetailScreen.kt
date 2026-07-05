@@ -143,7 +143,8 @@ fun CurationDetailScreen(
                     onClick = { 
                         showConfirmDialog = false
                         isProcessing = true
-                        viewModel.createNotebook(theme)
+                        val articlesToCreate = selectedIds.intersect(currentThemeArticles.map { it.id }.toSet()).toList()
+                        viewModel.createNotebook(theme, articlesToCreate)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
                 ) {

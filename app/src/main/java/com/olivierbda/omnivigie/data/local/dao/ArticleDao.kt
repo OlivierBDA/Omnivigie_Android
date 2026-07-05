@@ -40,6 +40,9 @@ interface ArticleDao {
         notebookName: String
     )
 
+    @Query("SELECT * FROM articles WHERE id IN (:articleIds)")
+    suspend fun getArticlesByIds(articleIds: List<Int>): List<ArticleEntity>
+
     @Update
     suspend fun updateArticle(article: ArticleEntity)
 
