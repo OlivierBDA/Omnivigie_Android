@@ -34,5 +34,7 @@ data class ArticleEntity(
     val aiExplanation: String? = null,
     
     val isQualified: Boolean = false,
-    val isSentToNotebook: Boolean = false
+    val isSentToNotebook: Boolean = false,
+    val notebookId: String? = null,
+    val notebookName: String? = null
 )

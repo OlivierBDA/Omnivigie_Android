@@ -15,7 +15,12 @@ import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 import com.olivierbda.omnivigie.data.repository.GmailRepository
 import com.olivierbda.omnivigie.data.repository.GeminiRepository
 import com.olivierbda.omnivigie.data.repository.NotebookRepository
+import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
+import com.olivierbda.omnivigie.domain.usecase.CreateThemedNotebookUseCase
 import com.olivierbda.omnivigie.domain.usecase.QualifyArticlesUseCase
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.scalars.ScalarsConverterFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,11 +43,53 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     private val sessionManager = SessionManager(application)
     private val notebookRepository = NotebookRepository(sessionManager)
+    
+    private val notebookLmApiService = Retrofit.Builder()
+        .baseUrl("https://notebooklm.google.com/")
+        .client(OkHttpClient.Builder()
+            .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+            .build())
+        .addConverterFactory(retrofit2.converter.scalars.ScalarsConverterFactory.create())
+        .build()
+        .create(com.olivierbda.omnivigie.data.remote.NotebookLmApiService::class.java)
+
+    private val notebookLmRepository = NotebookLmRepository(notebookLmApiService, sessionManager)
+    private val createThemedNotebookUseCase = CreateThemedNotebookUseCase(notebookLmRepository, articleDao)
 
     private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
 
     val articles: StateFlow<List<ArticleEntity>> = articleDao.getAllArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val unsentArticles: StateFlow<List<ArticleEntity>> = articleDao.getAllUnsentArticles()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _selectedArticles = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedArticles = _selectedArticles.asStateFlow()
+
+    fun toggleArticleSelection(articleId: Int) {
+        _selectedArticles.value = if (_selectedArticles.value.contains(articleId)) {
+            _selectedArticles.value - articleId
+        } else {
+            _selectedArticles.value + articleId
+        }
+    }
+
+    fun selectAll(articleIds: List<Int>) {
+        _selectedArticles.value = articleIds.toSet()
+    }
+
+    fun deselectAll() {
+        _selectedArticles.value = emptySet()
+    }
+
+    fun deleteArticle(article: ArticleEntity) {
+        viewModelScope.launch {
+            articleDao.deleteArticle(article)
+        }
+    }
 
     val gmailFilter: StateFlow<String> = settingDao.getSetting("gmail_filter")
         .map { it ?: DEFAULT_FILTER }
@@ -146,6 +193,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             qualifyArticlesUseCase.execute().collectLatest { status ->
                 _syncStatus.value = status
+            }
+        }
+    }
+
+    fun createNotebook(theme: String) {
+        viewModelScope.launch {
+            _syncStatus.value = "Création du carnet NotebookLM..."
+            val result = createThemedNotebookUseCase.execute(theme)
+            result.onSuccess { notebookName ->
+                _syncStatus.value = "Carnet '$notebookName' créé avec succès !"
+                deselectAll()
+            }.onFailure { error ->
+                _syncStatus.value = "Erreur : ${error.message}"
             }
         }
     }

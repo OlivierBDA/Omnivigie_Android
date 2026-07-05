@@ -42,7 +42,10 @@ import com.olivierbda.omnivigie.ui.auth.NotebookAuthActivity
 @Composable
 fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     var activeTab by remember { mutableStateOf(0) }
+    var selectedThemeForDetail by remember { mutableStateOf<String?>(null) }
+    
     val articles by viewModel.articles.collectAsState()
+    val unsentArticles by viewModel.unsentArticles.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     val notebookStatus by viewModel.notebookStatus.collectAsState()
     val context = LocalContext.current
@@ -59,6 +62,16 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
+    }
+
+    if (selectedThemeForDetail != null) {
+        CurationDetailScreen(
+            theme = selectedThemeForDetail!!,
+            articles = unsentArticles,
+            viewModel = viewModel,
+            onBack = { selectedThemeForDetail = null }
+        )
+        return
     }
 
     Scaffold(
@@ -172,8 +185,9 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
                     }
                 )
                 1 -> CurationTab(
-                    articles = articles,
-                    onCleanupClick = { viewModel.cleanupArticles() }
+                    articles = unsentArticles,
+                    onCleanupClick = { viewModel.cleanupArticles() },
+                    onThemeClick = { theme -> selectedThemeForDetail = theme }
                 )
                 2 -> SettingsTab(viewModel)
             }
@@ -468,8 +482,23 @@ fun StatCard(
 @Composable
 fun CurationTab(
     articles: List<ArticleEntity>,
-    onCleanupClick: () -> Unit
+    onCleanupClick: () -> Unit,
+    onThemeClick: (String) -> Unit
 ) {
+    val themes = remember(articles) {
+        val themeMap = mutableMapOf<String, Int>()
+        articles.forEach { article ->
+            if (article.aiThemes.isEmpty()) {
+                themeMap["Non classé"] = (themeMap["Non classé"] ?: 0) + 1
+            } else {
+                article.aiThemes.forEach { theme ->
+                    themeMap[theme] = (themeMap[theme] ?: 0) + 1
+                }
+            }
+        }
+        themeMap.toList().sortedByDescending { it.second }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -481,7 +510,7 @@ fun CurationTab(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Articles Qualifiés",
+                text = "Curation par Thème",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextAccent,
                 fontWeight = FontWeight.Bold
@@ -505,13 +534,57 @@ fun CurationTab(
         
         Spacer(modifier = Modifier.height(12.dp))
         
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(articles) { article ->
-                ArticleCard(article)
+        if (themes.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Aucun article à traiter", color = TextSecondary)
             }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(themes) { (theme, count) ->
+                    ThemeTile(theme, count, onClick = { onThemeClick(theme) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ThemeTile(theme: String, count: Int, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(20.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = theme,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "$count article(s) en attente",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = CosmicPrimary
+            )
         }
     }
 }

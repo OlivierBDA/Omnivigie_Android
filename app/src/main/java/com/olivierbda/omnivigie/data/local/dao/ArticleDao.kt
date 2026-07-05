@@ -24,8 +24,21 @@ interface ArticleDao {
     @Query("SELECT * FROM articles WHERE isQualified = 0 AND isSponsor = 0")
     suspend fun getUnqualifiedArticles(): List<ArticleEntity>
 
+    @Query("SELECT * FROM articles WHERE isSentToNotebook = 0 ORDER BY id DESC")
+    fun getAllUnsentArticles(): Flow<List<ArticleEntity>>
+
     @Query("DELETE FROM articles WHERE aiInterest = 0 OR isSentToNotebook = 1 OR aiExplanation LIKE '%trop court%' OR aiExplanation LIKE '%Publicité%'")
     suspend fun cleanupArticles()
+
+    @Query("SELECT * FROM articles WHERE aiInterest = 1 AND isSentToNotebook = 0 AND aiThemes LIKE :themePattern ORDER BY id DESC")
+    suspend fun getInterestingPendingArticlesByTheme(themePattern: String): List<ArticleEntity>
+
+    @Query("UPDATE articles SET isSentToNotebook = 1, notebookId = :notebookId, notebookName = :notebookName WHERE id IN (:articleIds)")
+    suspend fun markArticlesAsProcessedInNotebook(
+        articleIds: List<Int>,
+        notebookId: String,
+        notebookName: String
+    )
 
     @Update
     suspend fun updateArticle(article: ArticleEntity)
