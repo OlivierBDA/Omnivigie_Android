@@ -27,6 +27,8 @@ import com.olivierbda.omnivigie.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+import androidx.compose.ui.text.style.TextAlign
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CurationDetailScreen(
@@ -36,7 +38,9 @@ fun CurationDetailScreen(
     onBack: () -> Unit
 ) {
     val selectedIds by viewModel.selectedArticles.collectAsState()
+    val syncStatus by viewModel.syncStatus.collectAsState()
     var showConfirmDialog by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
     
     val currentThemeArticles = remember(articles, theme) {
         if (theme == "Non classé") {
@@ -138,8 +142,8 @@ fun CurationDetailScreen(
                 Button(
                     onClick = { 
                         showConfirmDialog = false
+                        isProcessing = true
                         viewModel.createNotebook(theme)
-                        onBack()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
                 ) {
@@ -149,6 +153,50 @@ fun CurationDetailScreen(
             dismissButton = {
                 TextButton(onClick = { showConfirmDialog = false }) {
                     Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    if (isProcessing) {
+        AlertDialog(
+            onDismissRequest = { },
+            containerColor = CosmicSurface,
+            title = { Text("Carnet NotebookLM", color = TextPrimary) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val isDone = syncStatus?.startsWith("Terminé") == true
+                    val isError = syncStatus?.startsWith("Erreur") == true || syncStatus?.startsWith("Échec") == true
+                    
+                    if (!isDone && !isError) {
+                        CircularProgressIndicator(color = CosmicPrimary)
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    
+                    Text(
+                        text = syncStatus ?: "Initialisation...",
+                        color = if (isError) SystemRed else TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            },
+            confirmButton = {
+                val isDone = syncStatus?.startsWith("Terminé") == true
+                val isError = syncStatus?.startsWith("Erreur") == true || syncStatus?.startsWith("Échec") == true
+                
+                if (isDone || isError) {
+                    Button(
+                        onClick = { 
+                            isProcessing = false
+                            if (isDone) onBack()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                    ) {
+                        Text("Fermer")
+                    }
                 }
             }
         )

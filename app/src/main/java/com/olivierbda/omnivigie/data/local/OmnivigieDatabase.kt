@@ -14,7 +14,7 @@ import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 
 @Database(
     entities = [EmailEntity::class, ArticleEntity::class, SettingEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

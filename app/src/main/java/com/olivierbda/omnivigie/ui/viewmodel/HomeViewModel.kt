@@ -199,13 +199,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createNotebook(theme: String) {
         viewModelScope.launch {
-            _syncStatus.value = "Création du carnet NotebookLM..."
-            val result = createThemedNotebookUseCase.execute(theme)
-            result.onSuccess { notebookName ->
-                _syncStatus.value = "Carnet '$notebookName' créé avec succès !"
-                deselectAll()
-            }.onFailure { error ->
-                _syncStatus.value = "Erreur : ${error.message}"
+            val selectedIds = _selectedArticles.value.toList()
+            if (selectedIds.isEmpty()) {
+                _syncStatus.value = "Erreur : Aucun article sélectionné"
+                return@launch
+            }
+
+            createThemedNotebookUseCase.execute(theme, selectedIds).collectLatest { status ->
+                _syncStatus.value = status
+                if (status.startsWith("Terminé")) {
+                    deselectAll()
+                }
             }
         }
     }
