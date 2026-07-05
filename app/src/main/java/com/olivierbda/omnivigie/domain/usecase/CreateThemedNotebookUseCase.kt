@@ -3,8 +3,11 @@ package com.olivierbda.omnivigie.domain.usecase
 import android.util.Log
 import com.olivierbda.omnivigie.data.local.dao.ArticleDao
 import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -22,7 +25,9 @@ class CreateThemedNotebookUseCase(
         }
 
         // 1. Récupération des articles par IDs directement
-        val pendingArticles = articleDao.getArticlesByIds(articleIds)
+        val pendingArticles = withContext(Dispatchers.IO) {
+            articleDao.getArticlesByIds(articleIds)
+        }
 
         if (pendingArticles.isEmpty()) {
             emit("Erreur : Les articles sélectionnés ne sont plus disponibles.")
@@ -37,7 +42,10 @@ class CreateThemedNotebookUseCase(
         Log.d(TAG, "Lancement de la création du carnet : $notebookName avec ${pendingArticles.size} articles.")
 
         // 3. Appel à NotebookLM pour la création du carnet de notes
-        val notebookId = notebookRepository.createNotebook(notebookName)
+        val notebookId = withContext(Dispatchers.IO) {
+            notebookRepository.createNotebook(notebookName)
+        }
+        
         if (notebookId == null) {
             emit("Échec de la création du carnet (vérifiez votre connexion).")
             return@flow
@@ -48,11 +56,13 @@ class CreateThemedNotebookUseCase(
         pendingArticles.forEachIndexed { index, article ->
             emit("Ajout source ${index + 1}/${pendingArticles.size} : ${article.title}")
             
-            val isAdded = notebookRepository.addUrlSource(
-                notebookId = notebookId,
-                title = article.title,
-                url = article.url
-            )
+            val isAdded = withContext(Dispatchers.IO) {
+                notebookRepository.addUrlSource(
+                    notebookId = notebookId,
+                    title = article.title,
+                    url = article.url
+                )
+            }
             if (isAdded) {
                 successProcessedIds.add(article.id)
             } else {
@@ -63,14 +73,16 @@ class CreateThemedNotebookUseCase(
         // 5. Mise à jour de l'état local en base Room
         if (successProcessedIds.isNotEmpty()) {
             emit("Mise à jour de la base de données...")
-            articleDao.markArticlesAsProcessedInNotebook(
-                articleIds = successProcessedIds,
-                notebookId = notebookId,
-                notebookName = notebookName
-            )
+            withContext(Dispatchers.IO) {
+                articleDao.markArticlesAsProcessedInNotebook(
+                    articleIds = successProcessedIds,
+                    notebookId = notebookId,
+                    notebookName = notebookName
+                )
+            }
             emit("Terminé ! Carnet créé avec ${successProcessedIds.size} sources.")
         } else {
             emit("Erreur : Aucun article n'a pu être injecté dans le carnet.")
         }
-    }
+    }.flowOn(Dispatchers.IO)
 }

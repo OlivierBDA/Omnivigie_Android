@@ -9,6 +9,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 
 class QualifyArticlesUseCase(
@@ -24,7 +25,10 @@ class QualifyArticlesUseCase(
         val themesJson = readAsset("themes.json")
         val themes: List<String> = gson.fromJson(themesJson, object : TypeToken<List<String>>() {}.type)
 
-        val articles = articleDao.getUnqualifiedArticles()
+        val articles = withContext(Dispatchers.IO) {
+            articleDao.getUnqualifiedArticles()
+        }
+        
         if (articles.isEmpty()) {
             emit("Aucun article à qualifier.")
             return@flow
@@ -38,27 +42,35 @@ class QualifyArticlesUseCase(
             // Pre-filtering: exclude if reading time < 5 min or N/A
             val readingTimeValue = extractMinutes(article.readingTime)
             
-            if (article.readingTime.contains("N/A", ignoreCase = true)) {
-                articleDao.updateArticle(article.copy(
+            val updatedArticle = if (article.readingTime.contains("N/A", ignoreCase = true)) {
+                article.copy(
                     aiInterest = false,
                     aiExplanation = "Publicité ou contenu non qualifié (N/A).",
                     isQualified = true
-                ))
+                )
             } else if (readingTimeValue != null && readingTimeValue < 5) {
-                articleDao.updateArticle(article.copy(
+                article.copy(
                     aiInterest = false,
                     aiExplanation = "Article trop court (< 5 min).",
                     isQualified = true
-                ))
+                )
             } else {
                 val qualification = geminiRepository.qualifyArticle(article, criteria, themes)
                 if (qualification != null) {
-                    articleDao.updateArticle(article.copy(
+                    article.copy(
                         aiInterest = qualification.interest,
                         aiThemes = qualification.themes,
                         aiExplanation = qualification.explanation,
                         isQualified = true
-                    ))
+                    )
+                } else {
+                    null
+                }
+            }
+
+            if (updatedArticle != null) {
+                withContext(Dispatchers.IO) {
+                    articleDao.updateArticle(updatedArticle)
                 }
             }
         }
