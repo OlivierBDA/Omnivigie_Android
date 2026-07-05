@@ -17,12 +17,14 @@ interface NotebookLmApiService {
      * @param csrfToken Le jeton CSRF (SNlM0e) indispensable pour sécuriser l'appel RPC.  
      * @param req Le payload sérialisé au format attendu par batchexecute.  
      */  
-    @FormUrlEncoded  
-    @POST("_/NotebookLmUi/data/batchexecute")  
+    @FormUrlEncoded
+    @POST("_/NotebookLmUi/data/batchexecute")
     suspend fun batchExecute(  
         @Query("rpcids") rpcId: String,  
-        @Query("f.sid") fSid: String,  
-        @Header("Cookie") cookie: String,  
+        @Query("f.sid") fSid: String,
+        @Query("at") at: String,
+        @Header("Cookie") cookie: String,
+        @Header("User-Agent") userAgent: String,
         @Header("X-Goog-Ext-277745143-Jspb") csrfToken: String,  
         @Field("f.req") req: String  
     ): String  

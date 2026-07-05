@@ -14,6 +14,8 @@ class NotebookLmRepository(
 
     private val TAG = "NotebookLmRepository"
 
+    private val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+
     /**  
      * Crée un nouveau carnet de notes thématique dans NotebookLM.  
      * @param title Le titre du carnet (ex: "[AI] 2026-05-11 TLDR-Machine Learning")  
@@ -52,8 +54,10 @@ class NotebookLmRepository(
 
             val responseText = apiService.batchExecute(  
                 rpcId = "CCqFvf",  
-                fSid = session.fdrfje,  
-                cookie = session.cookies,  
+                fSid = session.fdrfje,
+                at = session.snlm0e,
+                cookie = session.cookies,
+                userAgent = USER_AGENT,
                 csrfToken = session.snlm0e,  
                 req = fReq  
             )
@@ -117,8 +121,10 @@ class NotebookLmRepository(
 
             val responseText = apiService.batchExecute(  
                 rpcId = "izAoDd",  
-                fSid = session.fdrfje,  
-                cookie = session.cookies,  
+                fSid = session.fdrfje,
+                at = session.snlm0e,
+                cookie = session.cookies,
+                userAgent = USER_AGENT,
                 csrfToken = session.snlm0e,  
                 req = fReq  
             )
