@@ -4,6 +4,7 @@ import android.util.Log
 import com.olivierbda.omnivigie.data.local.dao.ArticleDao
 import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -58,8 +59,23 @@ class CreateThemedNotebookUseCase(
             notebookRepository.addUrlsBatch(idToken, notebookId, urls)
         }
 
-        // 5. Mise à jour de l'état local en base Room
-        if (success) {
+        if (!success) {
+            emit("Erreur lors de l'ajout des sources via le backend.")
+            return@flow
+        }
+
+        // 5. Attente pour l'indexation par NotebookLM
+        emit("Attente de l'indexation (30s)...")
+        delay(30000)
+
+        // 6. Déclenchement de la génération du Podcast
+        emit("Lancement de la génération du podcast...")
+        val podcastStarted = withContext(Dispatchers.IO) {
+            notebookRepository.generatePodcast(idToken, notebookId)
+        }
+
+        // 7. Mise à jour de l'état local en base Room
+        if (podcastStarted) {
             emit("Mise à jour de la base de données...")
             withContext(Dispatchers.IO) {
                 articleDao.markArticlesAsProcessedInNotebook(
@@ -68,9 +84,9 @@ class CreateThemedNotebookUseCase(
                     notebookName = notebookName
                 )
             }
-            emit("Terminé ! Carnet créé avec ${urls.size} sources.")
+            emit("Terminé ! Carnet créé et podcast lancé.")
         } else {
-            emit("Erreur lors de l'ajout des sources via le backend.")
+            emit("Le carnet est créé mais la génération du podcast a échoué.")
         }
     }.flowOn(Dispatchers.IO)
 }

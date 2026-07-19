@@ -69,4 +69,32 @@ class NotebookLmRepository(
             false
         }
     }
+
+    /**
+     * Déclenche la génération du podcast via la Cloud Function GCP.
+     */
+    suspend fun generatePodcast(idToken: String, notebookId: String): Boolean {
+        val storageStateJson = sessionManager.getNotebookStorageState() ?: return false
+        val storageState = gson.fromJson(storageStateJson, Any::class.java)
+
+        val request = GcpFunctionRequest(
+            action = "generate_podcast",
+            notebookId = notebookId,
+            storageState = storageState
+        )
+
+        return try {
+            val response = gcpApiService.executeAction("Bearer $idToken", request)
+            if (response.error != null) {
+                Log.e(TAG, "Erreur backend GCP (generate_podcast): ${response.error}")
+                false
+            } else {
+                Log.d(TAG, "Génération du podcast lancée. Task ID: ${response.taskId}")
+                true
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception lors de generatePodcast: ${e.message}")
+            false
+        }
+    }
 }
