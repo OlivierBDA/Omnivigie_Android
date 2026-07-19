@@ -10,17 +10,16 @@ import com.olivierbda.omnivigie.data.auth.AuthManager
 import com.olivierbda.omnivigie.data.auth.SessionManager
 import com.olivierbda.omnivigie.data.local.OmnivigieDatabase
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
-import com.olivierbda.omnivigie.data.local.entities.EmailEntity
 import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 import com.olivierbda.omnivigie.data.repository.GmailRepository
 import com.olivierbda.omnivigie.data.repository.GeminiRepository
-import com.olivierbda.omnivigie.data.repository.NotebookRepository
 import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
 import com.olivierbda.omnivigie.domain.usecase.CreateThemedNotebookUseCase
 import com.olivierbda.omnivigie.domain.usecase.QualifyArticlesUseCase
+import com.olivierbda.omnivigie.data.remote.GcpFunctionApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import retrofit2.converter.scalars.ScalarsConverterFactory
+import retrofit2.converter.gson.GsonConverterFactory
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,23 +41,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, geminiRepository)
     
     private val sessionManager = SessionManager(application)
-    private val notebookRepository = NotebookRepository(sessionManager)
     
-    private val notebookLmApiService = Retrofit.Builder()
-        .baseUrl("https://notebooklm.google.com/")
+    private val gcpFunctionApiService = Retrofit.Builder()
+        .baseUrl("https://omnivigie-python-backend-306370227717.europe-west1.run.app")
         .client(OkHttpClient.Builder()
             .addInterceptor(okhttp3.logging.HttpLoggingInterceptor().apply {
                 level = okhttp3.logging.HttpLoggingInterceptor.Level.BODY
             })
-            .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
             .build())
-        .addConverterFactory(retrofit2.converter.scalars.ScalarsConverterFactory.create())
+        .addConverterFactory(GsonConverterFactory.create())
         .build()
-        .create(com.olivierbda.omnivigie.data.remote.NotebookLmApiService::class.java)
+        .create(GcpFunctionApiService::class.java)
 
-    private val notebookLmRepository = NotebookLmRepository(notebookLmApiService, sessionManager)
+    private val notebookLmRepository = NotebookLmRepository(gcpFunctionApiService, sessionManager)
     private val createThemedNotebookUseCase = CreateThemedNotebookUseCase(notebookLmRepository, articleDao)
 
     private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
@@ -104,9 +101,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _notebookStatus = MutableStateFlow("Vérification...")
     val notebookStatus = _notebookStatus.asStateFlow()
 
-    private val _recentNotebooks = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    val recentNotebooks = _recentNotebooks.asStateFlow()
-
     private val _authorizationPendingIntent = MutableStateFlow<PendingIntent?>(null)
     val authorizationPendingIntent = _authorizationPendingIntent.asStateFlow()
 
@@ -117,14 +111,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshNotebookStatus() {
         viewModelScope.launch {
             if (sessionManager.isNotebookConnected()) {
-                val isValid = notebookRepository.checkConnection()
-                _notebookStatus.value = if (isValid) "Connecté" else "Session expirée"
-                if (isValid) {
-                    _recentNotebooks.value = notebookLmRepository.listRecentNotebooks()
-                }
+                _notebookStatus.value = "Connecté (Format Backend)"
             } else {
                 _notebookStatus.value = "Non Connecté (Authentification requise)"
-                _recentNotebooks.value = emptyList()
             }
         }
     }
@@ -207,14 +196,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun createNotebook(theme: String, selectedIds: List<Int>) {
+    fun createNotebook(activity: Activity, theme: String, selectedIds: List<Int>) {
         viewModelScope.launch {
             if (selectedIds.isEmpty()) {
                 _syncStatus.value = "Erreur : Aucun article sélectionné"
                 return@launch
             }
 
-            createThemedNotebookUseCase.execute(theme, selectedIds).collectLatest { status ->
+            _syncStatus.value = "Authentification IAM GCP..."
+            val idToken = authManager.getGcpIdToken(activity)
+            if (idToken == null) {
+                _syncStatus.value = "Échec de l'authentification IAM"
+                return@launch
+            }
+
+            createThemedNotebookUseCase.execute(idToken, theme, selectedIds).collectLatest { status ->
                 _syncStatus.value = status
                 if (status.startsWith("Terminé")) {
                     deselectAll()

@@ -9,6 +9,8 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.olivierbda.omnivigie.data.auth.SessionManager
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.regex.Pattern
 
 class NotebookAuthActivity : ComponentActivity() {
@@ -24,17 +26,13 @@ class NotebookAuthActivity : ComponentActivity() {
         webView = WebView(this)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
-        webView.settings.userAgentString = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-
-        webView.addJavascriptInterface(MyJavaScriptInterface(), "HTMLViewer")
+        webView.settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 if (url?.contains("notebooklm.google.com") == true) {
-                    // Inject JS to get HTML content
-                    webView.loadUrl("javascript:window.HTMLViewer.showHTML" +
-                            "('<html>'+document.getElementsByTagName('html')[0].innerHTML+'</html>');")
+                    captureStorageState()
                 }
             }
         }
@@ -43,28 +41,45 @@ class NotebookAuthActivity : ComponentActivity() {
         setContentView(webView)
     }
 
-    inner class MyJavaScriptInterface {
-        @JavascriptInterface
-        fun showHTML(html: String) {
-            val snlm0e = extractToken(html, "SNlM0e")
-            val fdrfje = extractToken(html, "FdrFJe")
+    private fun captureStorageState() {
+        val cookieManager = CookieManager.getInstance()
+        val url = "https://notebooklm.google.com/"
+        val cookiesString = cookieManager.getCookie(url) ?: return
 
-            if (snlm0e != null && fdrfje != null) {
-                val cookies = CookieManager.getInstance().getCookie("https://notebooklm.google.com/")
-                if (cookies != null && cookies.contains("SID=")) {
-                    sessionManager.saveNotebookSession(cookies, snlm0e, fdrfje)
-                    runOnUiThread {
-                        Toast.makeText(this@NotebookAuthActivity, "Connexion NotebookLM réussie !", Toast.LENGTH_SHORT).show()
-                        finish()
-                    }
+        if (!cookiesString.contains("SID=")) return
+
+        try {
+            val storageState = JSONObject()
+            val cookiesArray = JSONArray()
+
+            val cookies = cookiesString.split("; ")
+            for (cookie in cookies) {
+                val parts = cookie.split("=", limit = 2)
+                if (parts.size == 2) {
+                    val cookieJson = JSONObject()
+                    cookieJson.put("name", parts[0])
+                    cookieJson.put("value", parts[1])
+                    cookieJson.put("domain", ".google.com")
+                    cookieJson.put("path", "/")
+                    cookieJson.put("expires", -1)
+                    cookieJson.put("httpOnly", false)
+                    cookieJson.put("secure", true)
+                    cookieJson.put("sameSite", "Lax")
+                    cookiesArray.put(cookieJson)
                 }
             }
-        }
 
-        private fun extractToken(html: String, tokenName: String): String? {
-            val pattern = Pattern.compile("\"$tokenName\":\"([^\"]+)\"")
-            val matcher = pattern.matcher(html)
-            return if (matcher.find()) matcher.group(1) else null
+            storageState.put("cookies", cookiesArray)
+            storageState.put("origins", JSONArray())
+
+            sessionManager.saveNotebookSession(storageState.toString())
+
+            runOnUiThread {
+                Toast.makeText(this, "Session NotebookLM capturée (format Playwright)", Toast.LENGTH_SHORT).show()
+                finish()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

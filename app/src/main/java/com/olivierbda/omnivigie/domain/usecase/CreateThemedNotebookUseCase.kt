@@ -18,7 +18,7 @@ class CreateThemedNotebookUseCase(
 ) {
     private val TAG = "CreateThemedNotebook"
 
-    fun execute(theme: String, articleIds: List<Int>): Flow<String> = flow {
+    fun execute(idToken: String, theme: String, articleIds: List<Int>): Flow<String> = flow {
         if (articleIds.isEmpty()) {
             emit("Erreur : Aucun article sélectionné.")
             return@flow
@@ -38,51 +38,39 @@ class CreateThemedNotebookUseCase(
         val dateString = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         val notebookName = "[AI] $dateString TLDR-$theme"
 
-        emit("Création du carnet : $notebookName...")
-        Log.d(TAG, "Lancement de la création du carnet : $notebookName avec ${pendingArticles.size} articles.")
-
-        // 3. Appel à NotebookLM pour la création du carnet de notes
+        emit("Création du carnet via GCP Backend...")
+        
+        // 3. Appel au Backend pour la création du carnet
         val notebookId = withContext(Dispatchers.IO) {
-            notebookRepository.createNotebook(notebookName)
+            notebookRepository.createNotebook(idToken, notebookName)
         }
         
         if (notebookId == null) {
-            emit("Échec de la création du carnet (vérifiez votre connexion).")
+            emit("Échec de la création du carnet sur le backend GCP.")
             return@flow
         }
 
-        // 4. Ajout itératif des sources URL dans le carnet
-        val successProcessedIds = mutableListOf<Int>()
-        pendingArticles.forEachIndexed { index, article ->
-            emit("Ajout source ${index + 1}/${pendingArticles.size} : ${article.title}")
-            
-            val isAdded = withContext(Dispatchers.IO) {
-                notebookRepository.addUrlSource(
-                    notebookId = notebookId,
-                    title = article.title,
-                    url = article.url
-                )
-            }
-            if (isAdded) {
-                successProcessedIds.add(article.id)
-            } else {
-                Log.e(TAG, "Échec de l'ajout de la source : ${article.title}")
-            }
+        // 4. Ajout en BATCH des sources URL (Optimisé pour le Backend)
+        val urls = pendingArticles.map { it.url }
+        emit("Ajout de ${urls.size} sources (Batch)...")
+        
+        val success = withContext(Dispatchers.IO) {
+            notebookRepository.addUrlsBatch(idToken, notebookId, urls)
         }
 
         // 5. Mise à jour de l'état local en base Room
-        if (successProcessedIds.isNotEmpty()) {
+        if (success) {
             emit("Mise à jour de la base de données...")
             withContext(Dispatchers.IO) {
                 articleDao.markArticlesAsProcessedInNotebook(
-                    articleIds = successProcessedIds,
+                    articleIds = articleIds,
                     notebookId = notebookId,
                     notebookName = notebookName
                 )
             }
-            emit("Terminé ! Carnet créé avec ${successProcessedIds.size} sources.")
+            emit("Terminé ! Carnet créé avec ${urls.size} sources.")
         } else {
-            emit("Erreur : Aucun article n'a pu être injecté dans le carnet.")
+            emit("Erreur lors de l'ajout des sources via le backend.")
         }
     }.flowOn(Dispatchers.IO)
 }

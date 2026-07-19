@@ -48,7 +48,6 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     val unsentArticles by viewModel.unsentArticles.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     val notebookStatus by viewModel.notebookStatus.collectAsState()
-    val recentNotebooks by viewModel.recentNotebooks.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -179,7 +178,6 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
                     articles = articles,
                     syncStatus = syncStatus,
                     notebookStatus = notebookStatus,
-                    recentNotebooks = recentNotebooks,
                     onSyncClick = { viewModel.syncGmail(context as Activity) },
                     onQualifyClick = { viewModel.qualifyArticles() },
                     onNotebookClick = {
@@ -202,7 +200,6 @@ fun DashboardTab(
     articles: List<ArticleEntity>,
     syncStatus: String?,
     notebookStatus: String,
-    recentNotebooks: List<Pair<String, String>>,
     onSyncClick: () -> Unit,
     onQualifyClick: () -> Unit,
     onNotebookClick: () -> Unit
@@ -252,24 +249,6 @@ fun DashboardTab(
                             color = CosmicTertiary,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-
-                    if (recentNotebooks.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "Derniers Carnets :",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextAccent
-                        )
-                        recentNotebooks.forEach { notebook ->
-                            Text(
-                                text = "• ${notebook.second}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
                     }
                 }
             }

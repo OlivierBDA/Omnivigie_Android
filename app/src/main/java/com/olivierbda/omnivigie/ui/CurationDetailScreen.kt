@@ -41,6 +41,7 @@ fun CurationDetailScreen(
     val syncStatus by viewModel.syncStatus.collectAsState()
     var showConfirmDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     
     val currentThemeArticles = remember(articles, theme) {
         if (theme == "Non classé") {
@@ -144,7 +145,7 @@ fun CurationDetailScreen(
                         showConfirmDialog = false
                         isProcessing = true
                         val articlesToCreate = selectedIds.intersect(currentThemeArticles.map { it.id }.toSet()).toList()
-                        viewModel.createNotebook(theme, articlesToCreate)
+                        viewModel.createNotebook(context as android.app.Activity, theme, articlesToCreate)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
                 ) {
