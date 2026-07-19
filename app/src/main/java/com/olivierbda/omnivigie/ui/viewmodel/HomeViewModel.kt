@@ -104,6 +104,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _notebookStatus = MutableStateFlow("Vérification...")
     val notebookStatus = _notebookStatus.asStateFlow()
 
+    private val _recentNotebooks = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val recentNotebooks = _recentNotebooks.asStateFlow()
+
     private val _authorizationPendingIntent = MutableStateFlow<PendingIntent?>(null)
     val authorizationPendingIntent = _authorizationPendingIntent.asStateFlow()
 
@@ -116,8 +119,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (sessionManager.isNotebookConnected()) {
                 val isValid = notebookRepository.checkConnection()
                 _notebookStatus.value = if (isValid) "Connecté" else "Session expirée"
+                if (isValid) {
+                    _recentNotebooks.value = notebookLmRepository.listRecentNotebooks()
+                }
             } else {
                 _notebookStatus.value = "Non Connecté (Authentification requise)"
+                _recentNotebooks.value = emptyList()
             }
         }
     }

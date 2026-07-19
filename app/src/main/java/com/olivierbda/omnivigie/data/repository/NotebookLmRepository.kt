@@ -139,6 +139,105 @@ class NotebookLmRepository(
         }  
     }
 
+    /**
+     * Fonction de debug pour lister les [limit] notebooks les plus récents.
+     * Idéal pour valider que le compte est bien lié et voir les IDs existants.
+     *
+     * @param limit Le nombre de notebooks à retourner (par défaut 2).
+     * @return Une liste de Pair(NotebookId, Titre)
+     */
+    suspend fun listRecentNotebooks(limit: Int = 2): List<Pair<String, String>> {
+        val TAG_DEBUG = "NotebookLM_ListDebug"
+
+        // 1. Vérification de la connexion
+        val session = sessionManager.getNotebookSession()
+        if (session == null) {
+            Log.e(TAG_DEBUG, "Échec: Aucune session active. Impossible de lister les notebooks.")
+            return emptyList()
+        }
+
+        Log.i(TAG_DEBUG, "✅ Étape 1 : Connexion à NotebookLM valide. FdrFJe extrait: ${session.fdrfje.take(5)}...")
+
+        return try {
+            Log.d(TAG_DEBUG, "⏳ Étape 2 : Préparation de la requête liste...")
+
+            // rpcid exact utilisé par notebooklm-py pour lister les notebooks
+            val rpcId = "v8L2hc"
+
+            // Le format standard pour récupérer une liste
+            val innerRequest = JSONArray().apply {
+                put(JSONObject.NULL)
+            }
+
+            val outerArray = JSONArray().apply {
+                put(rpcId)
+                put(innerRequest.toString()) // Toujours toString() pour l'inner request !
+                put(JSONObject.NULL)
+                put("generic")
+            }
+            val fReq = JSONArray().apply {
+                val batch = JSONArray().apply {
+                    put(outerArray)
+                }
+                put(batch)
+            }.toString()
+
+            Log.d(TAG_DEBUG, "   Payload Jspb généré : $fReq")
+
+            // 2. Appel réseau
+            val responseText = apiService.batchExecute(
+                rpcId = rpcId,
+                fSid = session.fdrfje,
+                at = session.snlm0e,
+                cookie = session.cookies,
+                userAgent = USER_AGENT,
+                csrfToken = session.snlm0e,
+                req = fReq
+            )
+
+            Log.d(TAG_DEBUG, "✅ Étape 3 : Réponse brute reçue (Taille: ${responseText.length} caractères)")
+
+            // 3. Extraction (Parsing)
+            val allNotebooks = extractNotebooks(responseText)
+            val recentNotebooks = allNotebooks.take(limit)
+
+            Log.i(TAG_DEBUG, "✅ Étape 4 : Extraction terminée. Affichage des $limit derniers notebooks :")
+            if (recentNotebooks.isEmpty()) {
+                Log.w(TAG_DEBUG, "   Aucun notebook trouvé ou échec du parsing Regex.")
+            } else {
+                recentNotebooks.forEachIndexed { index, notebook ->
+                    Log.i(TAG_DEBUG, "   -> [${index + 1}] Titre : '${notebook.second}' | ID : ${notebook.first}")
+                }
+            }
+
+            recentNotebooks
+
+        } catch (e: Exception) {
+            Log.e(TAG_DEBUG, "❌ Erreur critique lors de la liste des notebooks : ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * Parse la chaîne RPC brute pour y trouver des paires ID de Notebook / Titre.
+     */
+    private fun extractNotebooks(response: String): List<Pair<String, String>> {
+        val results = mutableListOf<Pair<String, String>>()
+        val pattern = Pattern.compile("\"([a-zA-Z0-9_-]{16,})\"[^\\[]*\\[\"([^\"]+)\"")
+        val matcher = pattern.matcher(response)
+
+        while (matcher.find()) {
+            val id = matcher.group(1)
+            val title = matcher.group(2)
+            if (id != null && title != null) {
+                if (!title.contains("google.com") && title.length > 2) {
+                    results.add(Pair(id, title))
+                }
+            }
+        }
+        return results.distinctBy { it.first }
+    }
+
     /**  
      * Utilise une expression régulière pour capturer les identifiants de ressource renvoyés par Google RPC.  
      */  
