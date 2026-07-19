@@ -12,9 +12,10 @@ L'application respecte les principes de la **Clean Architecture** et du pattern 
 *   **Couche UI** : Jetpack Compose avec un thème "Cosmic Dark" (Palette violette/indigo).
 *   **Couche Data** : 
     *   **Room DB** : Stockage local des emails, articles et réglages.
-    *   **Retrofit / OkHttp** : Client pour l'API Gmail.
-    *   **Credential Manager** : Authentification Google "One Tap".
+    *   **Retrofit / OkHttp** : Client pour l'API Gmail et le backend GCP.
+    *   **Credential Manager** : Authentification Google "One Tap" et jetons IAM.
     *   **Jsoup** : Parsing HTML complexe pour l'extraction d'articles.
+*   **Backend Hybrid** : Utilisation d'une **Cloud Function GCP (Python)** pour stabiliser les interactions complexes avec NotebookLM.
 
 ---
 
@@ -22,53 +23,51 @@ L'application respecte les principes de la **Clean Architecture** et du pattern 
 
 ### 1. Fondations & Interface [Terminé]
 *   Setup Gradle 9.4, AGP 9.2, SDK 37 (Android 15).
-*   Thème cosmique sombre et navigation par onglets (Dashboard, Curation, Paramètres).
+*   Thème cosmique sombre et navigation par onglets.
 
 ### 2. Persistance Locale (Room) [Terminé]
 *   Entités `EmailEntity`, `ArticleEntity` et `SettingEntity`.
-*   Support des `Flow` pour une UI réactive.
+*   Gestion réactive via `Flow`.
 
 ### 3. Acquisition Gmail [Terminé]
-*   Authentification via **Credential Manager** et **AuthorizationClient** (OAuth 2.0).
-*   Récupération filtrée par requête Gmail dynamique (paramétrable dans l'UI).
-*   Extraction du corps HTML avec décodage Base64.
+*   Authentification via **Credential Manager** et **AuthorizationClient**.
+*   Récupération filtrée par requête Gmail dynamique.
 
 ### 4. Extraction & Structuration (Jsoup) [Terminé]
-*   Portage de la logique Python pour découper les emails en articles structurés.
-*   Nettoyage automatique des URLs (suppression des UTM/tracking).
+*   Nettoyage des URLs (suppression UTM/tracking).
 *   Détection des sponsors et temps de lecture.
-*   Filtres d'exclusion de mots-clés (ex: "Apply here").
 
 ### 5. Qualification IA (Gemini) [Terminé]
 *   Intégration du SDK Google AI (Gemini 2.0 Flash Lite).
-*   Pré-filtrage intelligent : détection automatique des publicités (N/A) et articles courts (< 5 min).
-*   Prompt structuré pour l'analyse de pertinence, l'attribution de thèmes et la génération d'explications.
-*   Système de curation visuel avec indicateurs de statut et nettoyage automatique.
+*   Pré-filtrage intelligent (Sponsors, articles < 5 min, publicités N/A).
+*   Système de curation visuel avec indicateurs de statut.
 
-### 6. Authentification NotebookLM (WebView) [Terminé]
-*   Interface WebView pour la connexion sécurisée sur `notebooklm.google.com`.
-*   Extraction automatisée des jetons CSRF (`SNlM0e`) et de session (`FdrFJe`) via injection JavaScript.
-*   Stockage chiffré des identifiants via `EncryptedSharedPreferences`.
-*   Vérification dynamique de l'état de la session au démarrage et au retour dans l'application.
+### 6. Authentification NotebookLM [Terminé]
+*   Interface WebView pour la connexion sécurisée.
+*   Capture des sessions au format **Playwright (storage_state.json)** pour compatibilité backend.
+*   Stockage chiffré via `EncryptedSharedPreferences`.
+
+### 7. Création de Carnets & Ajout de Sources [Terminé]
+*   Flux de curation thématique : sélection manuelle et suppression d'articles.
+*   **Backend GCP** : Délégation de la création de notebooks à une Cloud Function Python sécurisée par IAM.
+*   Envoi groupé (Batch) des sources pour une performance optimale.
+
+### 8. Génération de Podcast Audio [Terminé]
+*   Automatisation de la synthèse audio "Deep Dive" dans NotebookLM.
+*   Pipeline complet avec attente intelligente d'indexation (30s) intégrée.
 
 ---
 
-## 🛠️ Éléments Techniques Structurants (Pour future session)
+## 🛠️ Évolutions Clés : Architecture GCP
 
-### Configuration Requise
-*   **local.properties** : Doit contenir `WEB_CLIENT_ID` (OAuth Web) et `GEMINI_API_KEY`.
-*   **Google Cloud Console** : L'app nécessite un Client ID **Android** (lié au SHA-1 de debug) ET un Client ID **Web**.
-*   **Scopes OAuth** : `https://www.googleapis.com/auth/gmail.readonly` doit être autorisé.
+Le projet a évolué vers une architecture hybride pour garantir la fiabilité des interactions avec NotebookLM :
+- **Sécurité IAM** : L'app Android récupère un jeton d'identité Google (ID Token) pour appeler de manière sécurisée les services GCP.
+- **Délégation Python** : Les opérations lourdes de NotebookLM (API RPC interne) sont exécutées par une Cloud Function Python, réutilisant la robustesse de la librairie `notebooklm-py`.
+- **Format de Session** : Passage d'une simple chaîne de cookies à un état de stockage Playwright complet pour une gestion de session transparente entre le mobile et le backend.
 
-### Logique de Parsing (ArticleExtractor.kt)
-Le parsing est basé sur la structure des newsletters TLDR :
-- Itération sur les blocs `div.text-block`.
-- Identification du titre via `a > strong`.
-- Résumé extrait depuis les `span` ayant un style `font-family`.
-- Nettoyage des paramètres d'URL via une logique manuelle pour éviter les dépendances Android dans les tests unitaires.
-
-### Flux de Données
-1. `HomeViewModel` déclenche la sync.
-2. `AuthManager` gère le jeton (et la résolution de consentement si besoin via `MainActivity`).
-3. `GmailRepository` télécharge l'email -> sauvegarde dans Room -> déclenche `ArticleExtractor` -> sauvegarde les articles dans Room.
-4. L'UI (Dashboard/Curation) observe les tables via Flow et se met à jour automatiquement.
+### Flux de Données Final
+1. `HomeViewModel` -> `AuthManager` (ID Token GCP).
+2. `HomeViewModel` -> `CreateThemedNotebookUseCase` (Pipeline).
+3. `CreateThemedNotebookUseCase` -> `NotebookLmRepository` -> `GCP Cloud Function`.
+4. La Cloud Function pilote NotebookLM et renvoie les IDs de création.
+5. Mise à jour finale de la base Room locale.
