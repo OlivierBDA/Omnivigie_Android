@@ -112,6 +112,9 @@ dependencies {
     // Security (for EncryptedSharedPreferences)
     implementation("androidx.security:security-crypto:1.1.0")
 
+    // AndroidX WebKit (for WebSettingsCompat & X-Requested-With header management)
+    implementation("androidx.webkit:webkit:1.12.0")
+
     // Google Sign-In for Gmail OAuth
     implementation("com.google.android.gms:play-services-auth:21.0.0")
 

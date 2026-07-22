@@ -32,6 +32,12 @@ class SessionManager(context: Context) {
         return getNotebookStorageState() != null
     }
 
+    fun getNotebookAuthAgeHours(): Long? {
+        val lastAuth = sharedPreferences.getLong("notebook_last_auth", 0L)
+        if (lastAuth == 0L) return null
+        return (System.currentTimeMillis() - lastAuth) / (1000 * 3600)
+    }
+
     fun clearNotebookSession() {
         sharedPreferences.edit().apply {
             remove("notebook_storage_state")

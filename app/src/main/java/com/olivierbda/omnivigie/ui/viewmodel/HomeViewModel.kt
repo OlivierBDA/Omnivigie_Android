@@ -29,6 +29,17 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+
+data class NotebookSummary(
+    val name: String,
+    val articleCount: Int,
+    val themes: List<String>,
+    val notebookId: String? = null
+)
+
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val db = OmnivigieDatabase.getDatabase(application)
     private val articleDao = db.articleDao()
@@ -66,6 +77,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val unsentArticles: StateFlow<List<ArticleEntity>> = articleDao.getAllUnsentArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val lastSyncTimestamp: StateFlow<String> = settingDao.getSetting("last_gmail_sync")
+        .map { it ?: "Aujourd'hui à 08:30" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "Aujourd'hui à 08:30")
+
+    val unqualifiedCount: StateFlow<Int> = articleDao.getUnqualifiedCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val pendingQualifiedCount: StateFlow<Int> = articleDao.getPendingQualifiedCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val notebooksCount: StateFlow<Int> = articleDao.getNotebooksCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val recentNotebooks: StateFlow<List<NotebookSummary>> = articleDao.getProcessedArticles()
+        .map { articles ->
+            articles.groupBy { it.notebookName ?: "Sans nom" }
+                .map { (name, group) ->
+                    val notebookId = group.firstOrNull()?.notebookId
+                    val themes = group.flatMap { it.aiThemes }.distinct()
+                    NotebookSummary(
+                        name = name,
+                        articleCount = group.size,
+                        themes = themes,
+                        notebookId = notebookId
+                    )
+                }
+                .take(3)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     private val _selectedArticles = MutableStateFlow<Set<Int>>(emptySet())
     val selectedArticles = _selectedArticles.asStateFlow()
 
@@ -101,6 +142,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _notebookStatus = MutableStateFlow("Vérification...")
     val notebookStatus = _notebookStatus.asStateFlow()
 
+    private val _gcpStatus = MutableStateFlow("Prêt")
+    val gcpStatus = _gcpStatus.asStateFlow()
+
     private val _authorizationPendingIntent = MutableStateFlow<PendingIntent?>(null)
     val authorizationPendingIntent = _authorizationPendingIntent.asStateFlow()
 
@@ -110,10 +154,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun refreshNotebookStatus() {
         viewModelScope.launch {
+            val ageHours = sessionManager.getNotebookAuthAgeHours()
             if (sessionManager.isNotebookConnected()) {
-                _notebookStatus.value = "Connecté (Format Backend)"
+                if (ageHours != null && ageHours > 24) {
+                    _notebookStatus.value = "A renouveler"
+                } else {
+                    _notebookStatus.value = "Connecté"
+                }
             } else {
-                _notebookStatus.value = "Non Connecté (Authentification requise)"
+                _notebookStatus.value = "Non Connecté"
+            }
+        }
+    }
+
+    fun reauthGcp(activity: Activity) {
+        viewModelScope.launch {
+            _syncStatus.value = "Demande d'authentification IAM GCP..."
+            val idToken = authManager.getGcpIdToken(activity)
+            if (idToken != null) {
+                _gcpStatus.value = "Token OK"
+                _syncStatus.value = "Authentification GCP réussie !"
+            } else {
+                _gcpStatus.value = "Erreur"
+                _syncStatus.value = "Échec du renouvellement IAM GCP"
             }
         }
     }
@@ -162,10 +225,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    fun syncAndProcessVeille(activity: Activity) {
+        viewModelScope.launch {
+            _syncStatus.value = "Authentification Gmail..."
+            val credential = authManager.signIn(activity)
+            if (credential == null) {
+                _syncStatus.value = "Échec de connexion Google"
+                return@launch
+            }
+
+            _syncStatus.value = "Vérification des autorisations..."
+            val authResult = authManager.authorizeGmail(activity)
+            
+            if (authResult == null) {
+                _syncStatus.value = "Erreur lors de l'autorisation Gmail"
+                return@launch
+            }
+
+            if (authResult.hasResolution()) {
+                _syncStatus.value = "Action requise : Autorisez l'accès à Gmail"
+                _authorizationPendingIntent.value = authResult.pendingIntent
+            } else {
+                startSync(authResult.accessToken!!)
+                qualifyArticles()
+            }
+        }
+    }
+
     private suspend fun startSync(token: String) {
         _syncStatus.value = "Synchronisation des emails..."
         val currentFilter = gmailFilter.value
         val count = gmailRepository.syncEmails(token, currentFilter)
+        
+        val timeFormat = SimpleDateFormat("'Aujourd''hui à' HH:mm", Locale.getDefault())
+        val formattedTime = timeFormat.format(Date())
+        settingDao.insertSetting(SettingEntity("last_gmail_sync", formattedTime))
+
         _syncStatus.value = "$count nouveaux emails récupérés"
     }
 
