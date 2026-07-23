@@ -1,73 +1,85 @@
-# Omnivigie Android (L'Assistant Veille sur Mobile)
+# Omnivigie Android - L'Assistant de Veille Technologique Automatisé
 
-Omnivigie Android est la migration mobile de l'assistant de veille technologique automatisé Omnivigie (initialement en Python). Cette application native Android (Kotlin/Jetpack Compose) est optimisée pour s'exécuter directement sur un Google Pixel 10 Pro.
-
-L'objectif est de récupérer les newsletters de veille (TLDR) depuis Gmail, d'extraire les articles, d'évaluer leur pertinence via Gemini (qualification automatique), puis de générer des podcasts d'analyse via Google NotebookLM.
+**Omnivigie Android** est une application native Android (Kotlin / Jetpack Compose) de veille technologique automatisée. Elle transforme la lecture passive de newsletters IT en une chaîne d'analyse intelligente alimentée par **Google Gemini 2.0** et **Google NotebookLM**.
 
 ---
 
-## 🏗️ Architecture Technique
+## 🎯 Fonctionnement Global de l'Application
 
-L'application respecte les principes de la **Clean Architecture** et du pattern **MVVM** :
-*   **Couche UI** : Jetpack Compose avec un thème "Cosmic Dark" (Palette violette/indigo).
-*   **Couche Data** : 
-    *   **Room DB** : Stockage local des emails, articles et réglages.
-    *   **Retrofit / OkHttp** : Client pour l'API Gmail et le backend GCP.
-    *   **Credential Manager** : Authentification Google "One Tap" et jetons IAM.
-    *   **Jsoup** : Parsing HTML complexe pour l'extraction d'articles.
-*   **Backend Hybrid** : Utilisation d'une **Cloud Function GCP (Python)** pour stabiliser les interactions complexes avec NotebookLM.
+Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes étapes :
 
----
+1. **Acquisition Automatique Gmail** :
+   - Connexion sécurisée à votre compte Gmail via l'API Google OAuth2.
+   - Récupération ciblée des newsletters de veille (ex: *TLDR AI*, *TLDR Tech*) à partir d'un filtre de date configurable via un **Calendrier interactif** (`after:YYYY/MM/DD`).
 
-## 📊 État d'Avancement des Fonctionnalités
+2. **Extraction & Nettoyage des Articles** :
+   - Parsing HTML haute précision (Jsoup) pour isoler les articles individuels.
+   - Nettoyage automatique des URLs (suppression des paramètres de tracking UTM), identification des sponsors et calcul de la durée estimée de lecture.
 
-### 1. Fondations & Interface [Terminé]
-*   Setup Gradle 9.4, AGP 9.2, SDK 37 (Android 15).
-*   Thème cosmique sombre et navigation par onglets.
+3. **Qualification par IA (Google Gemini 2.0)** :
+   - Analyse automatique de chaque article via l'API **Gemini 2.0 Flash Lite**.
+   - Pré-filtrage intelligent : rejet des articles trop courts (seuil configurable), des publicités et des thèmes hors cible (Web3, hardware grand public, finance).
+   - Attribution de thèmes de qualification pertinents (*IA Générative*, *Data Engineering*, *Agents Autonomes*, *Outils Développeurs*...).
 
-### 2. Persistance Locale (Room) [Terminé]
-*   Entités `EmailEntity`, `ArticleEntity` et `SettingEntity`.
-*   Gestion réactive via `Flow`.
+4. **Curation Visuelle & Sélection** :
+   - Organisation des articles par thématiques au sein d'un écran de curation interactif.
+   - Filtrage rapide par thèmes, sélection d'articles cibles et suppression rapide d'éléments obsolètes.
 
-### 3. Acquisition Gmail [Terminé]
-*   Authentification via **Credential Manager** et **AuthorizationClient**.
-*   Récupération filtrée par requête Gmail dynamique.
-
-### 4. Extraction & Structuration (Jsoup) [Terminé]
-*   Nettoyage des URLs (suppression UTM/tracking).
-*   Détection des sponsors et temps de lecture.
-
-### 5. Qualification IA (Gemini) [Terminé]
-*   Intégration du SDK Google AI (Gemini 2.0 Flash Lite).
-*   Pré-filtrage intelligent (Sponsors, articles < 5 min, publicités N/A).
-*   Système de curation visuel avec indicateurs de statut.
-
-### 6. Authentification NotebookLM [Terminé]
-*   Interface WebView pour la connexion sécurisée.
-*   Capture des sessions au format **Playwright (storage_state.json)** pour compatibilité backend.
-*   Stockage chiffré via `EncryptedSharedPreferences`.
-
-### 7. Création de Carnets & Ajout de Sources [Terminé]
-*   Flux de curation thématique : sélection manuelle et suppression d'articles.
-*   **Backend GCP** : Délégation de la création de notebooks à une Cloud Function Python sécurisée par IAM.
-*   Envoi groupé (Batch) des sources pour une performance optimale.
-
-### 8. Génération de Podcast Audio [Terminé]
-*   Automatisation de la synthèse audio "Deep Dive" dans NotebookLM.
-*   Pipeline complet avec attente intelligente d'indexation (30s) intégrée.
+5. **Génération de Podcasts & Carnets NotebookLM** :
+   - Création automatique d'un carnet **Google NotebookLM** nommé d'après la thématique choisie.
+   - Injection en lot des sources (URLs des articles qualifiés).
+   - Déclenchement automatisé du **Podcast Audio "Deep Dive"** de NotebookLM pour écouter un résumé synthétique de votre veille.
 
 ---
 
-## 🛠️ Évolutions Clés : Architecture GCP
+## 📱 Aperçus de l'Interface Utilisateur
 
-Le projet a évolué vers une architecture hybride pour garantir la fiabilité des interactions avec NotebookLM :
-- **Sécurité IAM** : L'app Android récupère un jeton d'identité Google (ID Token) pour appeler de manière sécurisée les services GCP.
-- **Délégation Python** : Les opérations lourdes de NotebookLM (API RPC interne) sont exécutées par une Cloud Function Python, réutilisant la robustesse de la librairie `notebooklm-py`.
-- **Format de Session** : Passage d'une simple chaîne de cookies à un état de stockage Playwright complet pour une gestion de session transparente entre le mobile et le backend.
+| Dashboard Omnivigie | Écran de Curation |
+| :---: | :---: |
+| ![Tableau de Bord](Omnivigie_Dashboard.png) | ![Curation par Thème](Omnivigie_Curation.png) |
+| **Bilan global, diagnostics et accès direct aux carnets** | **Vue regroupée des articles qualifiés par thématiques** |
 
-### Flux de Données Final
-1. `HomeViewModel` -> `AuthManager` (ID Token GCP).
-2. `HomeViewModel` -> `CreateThemedNotebookUseCase` (Pipeline).
-3. `CreateThemedNotebookUseCase` -> `NotebookLmRepository` -> `GCP Cloud Function`.
-4. La Cloud Function pilote NotebookLM et renvoie les IDs de création.
-5. Mise à jour finale de la base Room locale.
+| Focus sur un Thème | Paramètres de Veille |
+| :---: | :---: |
+| ![Focus sur un Thème](Omnivigie_FocusTheme.png) | ![Paramètres de Veille](Omnivigie_Parametres.png) |
+| **Détail d'un thème avec sélection/suppression des fiches** | **Configuration dynamique des critères, filtres et thèmes** |
+
+---
+
+## 🏗️ Aspects Techniques Structurants
+
+### 1. Architecture MVVM & Clean Architecture
+L'application s'appuie sur une architecture Android moderne et réactive :
+- **UI Layer** : 100% Jetpack Compose avec le thème "Cosmic Dark", réagissant aux états exposés par `StateFlow`.
+- **Domain Layer** : Use Cases métier spécialisés (`QualifyArticlesUseCase`, `CreateThemedNotebookUseCase`).
+- **Data Layer** : Base de données locale **Room DB** avec requêtes réactives en `Flow` et dépôts de données encapsulés (`GmailRepository`, `GeminiRepository`, `NotebookLmRepository`).
+
+### 2. Architecture Hybride Android / Backend GCP Cloud Function
+Pour contourner la complexité et les instabilités d'automatisation de NotebookLM sur terminal mobile :
+- **App Mobile Android** : Gère l'authentification utilisateur, l'interface graphique, la persistance locale et la qualification des contenus via Gemini.
+- **Backend GCP (Cloud Function Python)** : Reçoit les demandes de création de notebooks de l'application mobile via des jetons sécurisés **IAM GCP (ID Token)** et s'interface de manière robuste avec l'API interne de NotebookLM en s'appuyant sur la librairie `notebooklm-py`.
+
+### 3. Authentification Multi-Niveaux & WebView Sécurisée
+- **Gmail OAuth2 & Credential Manager** : Authentification fluide pour la récupération des newsletters.
+- **GCP IAM Authentication** : Obtention d'un jeton d'identité IAM pour sécuriser l'accès à la Cloud Function GCP.
+- **Authentification WebView NotebookLM** :
+  - Authentification dédiée via une WebView intégrée avec contournement de la restriction Google *"Navigateur non sécurisé"* (utilisation d'un User-Agent Chrome mobile propre et de `androidx.webkit`).
+  - Capture et stockage chiffré (`EncryptedSharedPreferences`) du format d'état de session **Playwright (`storage_state.json`)** pour garantir la persistance des sessions entre le téléphone et le backend Cloud Function.
+
+### 4. Paramétrage Dynamique & Persistance Locale Room
+L'ensemble des critères de la veille est entièrement dynamique et modifiable depuis l'application :
+- **Critères d'Intérêt (`qualification_criteria`)** : Édition libre via une boîte de dialogue dans les paramètres (fallback sur `criteria.md`).
+- **Thèmes & Catégories (`qualification_themes`)** : Ajout et suppression dynamique sous forme de chips interactifs (fallback sur `themes.json`).
+- **Date de Filtre Gmail (`gmail_filter_date`)** : Sélection graphique par calendrier Material3 DatePicker.
+- **Seuil de Temps de Lecture (`min_reading_time`)** : Pré-filtrage configurable (0, 3, 5, 10 min).
+
+---
+
+## 🚀 Stack Technique
+
+- **Langage & Framework** : Kotlin, Jetpack Compose, Coroutines, Flow, StateFlow.
+- **Android SDK** : Compile SDK 37 (Android 15), Target SDK 35, Min SDK 26.
+- **Base de Données Locale** : Room Database, EncryptedSharedPreferences.
+- **IA & APIs** : Google AI SDK (Gemini 2.0 Flash Lite), Retrofit 2, OkHttp 4, Jsoup.
+- **Backend Cloud** : Google Cloud Function Python, IAM Authentication.
+- **Outils de Build** : Gradle 9.4, AGP 9.2, KSP.

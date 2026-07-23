@@ -12,18 +12,34 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 
+import com.olivierbda.omnivigie.data.local.dao.SettingDao
+
 class QualifyArticlesUseCase(
     private val context: Context,
     private val articleDao: ArticleDao,
+    private val settingDao: SettingDao,
     private val geminiRepository: GeminiRepository
 ) {
     private val gson = Gson()
 
     fun execute(): Flow<String> = flow {
         emit("Récupération des critères...")
-        val criteria = readAsset("criteria.md")
-        val themesJson = readAsset("themes.json")
-        val themes: List<String> = gson.fromJson(themesJson, object : TypeToken<List<String>>() {}.type)
+        val customCriteria = withContext(Dispatchers.IO) { settingDao.getSettingValue("qualification_criteria") }
+        val criteria = if (!customCriteria.isNullOrBlank()) customCriteria else readAsset("criteria.md")
+
+        val customThemesJson = withContext(Dispatchers.IO) { settingDao.getSettingValue("qualification_themes") }
+        val themes: List<String> = if (!customThemesJson.isNullOrBlank()) {
+            try {
+                gson.fromJson(customThemesJson, object : TypeToken<List<String>>() {}.type)
+            } catch (e: Exception) {
+                gson.fromJson(readAsset("themes.json"), object : TypeToken<List<String>>() {}.type)
+            }
+        } else {
+            gson.fromJson(readAsset("themes.json"), object : TypeToken<List<String>>() {}.type)
+        }
+
+        val customMinReadingTime = withContext(Dispatchers.IO) { settingDao.getSettingValue("min_reading_time") }
+        val minReadingTime = customMinReadingTime?.toIntOrNull() ?: 5
 
         val articles = withContext(Dispatchers.IO) {
             articleDao.getUnqualifiedArticles()
@@ -39,7 +55,7 @@ class QualifyArticlesUseCase(
         articles.forEachIndexed { index, article ->
             emit("Analyse article ${index + 1}/${articles.size} : ${article.title}")
 
-            // Pre-filtering: exclude if reading time < 5 min or N/A
+            // Pre-filtering: exclude if reading time < minReadingTime min or N/A
             val readingTimeValue = extractMinutes(article.readingTime)
             
             val updatedArticle = if (article.readingTime.contains("N/A", ignoreCase = true)) {
@@ -48,10 +64,10 @@ class QualifyArticlesUseCase(
                     aiExplanation = "Publicité ou contenu non qualifié (N/A).",
                     isQualified = true
                 )
-            } else if (readingTimeValue != null && readingTimeValue < 5) {
+            } else if (readingTimeValue != null && minReadingTime > 0 && readingTimeValue < minReadingTime) {
                 article.copy(
                     aiInterest = false,
-                    aiExplanation = "Article trop court (< 5 min).",
+                    aiExplanation = "Article trop court (< $minReadingTime min).",
                     isQualified = true
                 )
             } else {

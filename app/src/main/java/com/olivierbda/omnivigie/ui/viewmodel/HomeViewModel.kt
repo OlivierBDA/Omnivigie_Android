@@ -28,6 +28,9 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import java.util.regex.Pattern
 
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,11 +48,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val articleDao = db.articleDao()
     private val emailDao = db.emailDao()
     private val settingDao = db.settingDao()
+    private val gson = Gson()
     
     private val authManager = AuthManager(application)
     private val gmailRepository = GmailRepository(emailDao, articleDao)
     private val geminiRepository = GeminiRepository()
-    private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, geminiRepository)
+    private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, settingDao, geminiRepository)
     
     private val sessionManager = SessionManager(application)
     
@@ -70,6 +74,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val createThemedNotebookUseCase = CreateThemedNotebookUseCase(notebookLmRepository, articleDao)
 
     private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
+    
+    private val DEFAULT_CRITERIA = """
+        # Critères d'Intérêt (Omnivigie)
+        The objective is to identify the most relevant articles for technology monitoring.
+
+        ## Relevant Themes (Priority)
+        *   **Data & Engineering:** Data Architecture, Data Engineering, and Data Pipelines.
+        *   **Artificial Intelligence:** Generative AI, Large Language Models (LLM), and Autonomous Agents.
+        *   **Development:** New developer tools and modern frameworks.
+        *   **Strategy & Use Cases:** Corporate strategies and Data/AI use cases, particularly for large enterprises.
+        *   **Patterns:** Development patterns, RAG (Retrieval-Augmented Generation), Agents, and Agentic workflows.
+
+        ## Non-Relevant Themes (To Exclude)
+        *   **Hardware:** Physical robotics, drones, and consumer hardware.
+        *   **Theoretical:** Pure algorithms and pure mathematics.
+        *   **Deep ML Research:** Model training, supervised/unsupervised learning, post-training, and fine-tuning (unless there is a concrete and innovative application).
+        *   **Web3:** Cryptocurrencies, Web3, and NFTs.
+        *   **Finance:** Pure financial news without significant technological impact.
+        *   **Funding:** Unknown startups raising funds without an interesting technological explanation.
+        *   **Creative AI:** Generative AI applied to entertainment (cinema, music, art).
+    """.trimIndent()
+
+    private val DEFAULT_THEMES = listOf(
+        "Architecture Data",
+        "Data Engineering",
+        "IA Générative & LLM",
+        "Agents Autonomes & Agentic",
+        "Outils pour Développeurs",
+        "Stratégie d'Entreprise Data/IA",
+        "Cas d'Usage",
+        "Pattern et architectures IA",
+        "Hardware",
+        "Modèles de langage (LLM)",
+        "RAG et Knowledge Management",
+        "Autres thématiques Data/IA"
+    )
 
     val articles: StateFlow<List<ArticleEntity>> = articleDao.getAllArticles()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -107,6 +147,46 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val qualificationCriteria: StateFlow<String> = settingDao.getSetting("qualification_criteria")
+        .map { it ?: DEFAULT_CRITERIA }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_CRITERIA)
+
+    val qualificationThemes: StateFlow<List<String>> = settingDao.getSetting("qualification_themes")
+        .map { json ->
+            if (!json.isNullOrBlank()) {
+                try {
+                    gson.fromJson<List<String>>(json, object : TypeToken<List<String>>() {}.type)
+                } catch (e: Exception) {
+                    DEFAULT_THEMES
+                }
+            } else {
+                DEFAULT_THEMES
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_THEMES)
+
+    val minReadingTime: StateFlow<Int> = settingDao.getSetting("min_reading_time")
+        .map { it?.toIntOrNull() ?: 5 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
+
+    val gmailFilter: StateFlow<String> = settingDao.getSetting("gmail_filter")
+        .map { it ?: DEFAULT_FILTER }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_FILTER)
+
+    val gmailFilterDate: StateFlow<String> = settingDao.getSetting("gmail_filter_date")
+        .map { it ?: extractDateFromFilter(gmailFilter.value) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "2026/06/24")
+
+    private fun extractDateFromFilter(filter: String): String {
+        val pattern = Pattern.compile("after:(\\d{4}/\\d{2}/\\d{2})")
+        val matcher = pattern.matcher(filter)
+        return if (matcher.find()) {
+            matcher.group(1) ?: "2026/06/24"
+        } else {
+            "2026/06/24"
+        }
+    }
+
     private val _selectedArticles = MutableStateFlow<Set<Int>>(emptySet())
     val selectedArticles = _selectedArticles.asStateFlow()
 
@@ -131,10 +211,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             articleDao.deleteArticle(article)
         }
     }
-
-    val gmailFilter: StateFlow<String> = settingDao.getSetting("gmail_filter")
-        .map { it ?: DEFAULT_FILTER }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_FILTER)
 
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
@@ -267,6 +343,51 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun updateGmailFilter(newFilter: String) {
         viewModelScope.launch {
             settingDao.insertSetting(SettingEntity("gmail_filter", newFilter))
+        }
+    }
+
+    fun updateGmailFilterDate(dateFormatted: String) {
+        val fullFilter = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:$dateFormatted"
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("gmail_filter", fullFilter))
+            settingDao.insertSetting(SettingEntity("gmail_filter_date", dateFormatted))
+        }
+    }
+
+    fun updateQualificationCriteria(newCriteria: String) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("qualification_criteria", newCriteria))
+        }
+    }
+
+    fun updateQualificationThemes(themes: List<String>) {
+        viewModelScope.launch {
+            val json = gson.toJson(themes)
+            settingDao.insertSetting(SettingEntity("qualification_themes", json))
+        }
+    }
+
+    fun addQualificationTheme(theme: String) {
+        val trimmed = theme.trim()
+        if (trimmed.isNotEmpty()) {
+            val current = qualificationThemes.value.toMutableList()
+            if (!current.contains(trimmed)) {
+                current.add(trimmed)
+                updateQualificationThemes(current)
+            }
+        }
+    }
+
+    fun removeQualificationTheme(theme: String) {
+        val current = qualificationThemes.value.toMutableList()
+        if (current.remove(theme)) {
+            updateQualificationThemes(current)
+        }
+    }
+
+    fun updateMinReadingTime(minMinutes: Int) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("min_reading_time", minMinutes.toString()))
         }
     }
 

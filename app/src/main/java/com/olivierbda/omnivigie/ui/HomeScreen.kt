@@ -27,7 +27,14 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.app.Activity
-import android.content.Intent
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -438,20 +445,37 @@ fun ArticleCard(article: ArticleEntity) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
     val gmailFilter by viewModel.gmailFilter.collectAsState()
-    var geminiKey by remember { mutableStateOf("••••••••••••••••••••••••") }
+    val gmailFilterDate by viewModel.gmailFilterDate.collectAsState()
+    val qualificationCriteria by viewModel.qualificationCriteria.collectAsState()
+    val qualificationThemes by viewModel.qualificationThemes.collectAsState()
+    val minReadingTime by viewModel.minReadingTime.collectAsState()
+
+    var showCriteriaDialog by remember { mutableStateOf(false) }
+    var showAddThemeDialog by remember { mutableStateOf(false) }
+    var showDatePickerDialog by remember { mutableStateOf(false) }
+    var showClearDataConfirmDialog by remember { mutableStateOf(false) }
+    var newThemeInput by remember { mutableStateOf("") }
+    var criteriaEditInput by remember { mutableStateOf("") }
+
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = System.currentTimeMillis()
+    )
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        contentPadding = PaddingValues(top = 12.dp, bottom = 32.dp)
     ) {
+        // 1. Paramètres d'Acquisition Gmail & Purge
         item {
             Text(
-                text = "Paramètres de Veille",
+                text = "Paramètres de Veille & Filtre Gmail",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextAccent,
                 fontWeight = FontWeight.Bold
@@ -461,64 +485,120 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = CosmicSurface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    OutlinedTextField(
-                        value = geminiKey,
-                        onValueChange = { geminiKey = it },
-                        label = { Text("Clé d'API Gemini") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CosmicPrimary,
-                            unfocusedBorderColor = CosmicSurfaceVariant,
-                            focusedLabelColor = CosmicPrimary,
-                            unfocusedLabelColor = TextSecondary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                    Text(
+                        text = "Date de début de récupération des emails (Gmail) :",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+
+                    OutlinedButton(
+                        onClick = { showDatePickerDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = TextPrimary,
+                            containerColor = CosmicSurfaceVariant
                         ),
-                        trailingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.VisibilityOff,
-                                contentDescription = null,
-                                tint = TextSecondary
-                            )
-                        }
-                    )
-
-                    OutlinedTextField(
-                        value = gmailFilter,
-                        onValueChange = { viewModel.updateGmailFilter(it) },
-                        label = { Text("Filtre de recherche Gmail") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CosmicPrimary,
-                            unfocusedBorderColor = CosmicSurfaceVariant,
-                            focusedLabelColor = CosmicPrimary,
-                            unfocusedLabelColor = TextSecondary,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        )
-                    )
-
-                    Button(
-                        onClick = { viewModel.clearData() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = SystemRed),
-                        shape = RoundedCornerShape(8.dp)
+                        border = BorderStroke(1.dp, CosmicPrimary)
                     ) {
-                        Icon(Icons.Default.DeleteSweep, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Remise à zéro de la base", color = Color.White)
+                        Icon(
+                            imageVector = Icons.Default.CalendarToday,
+                            contentDescription = "Select Date",
+                            tint = CosmicTertiary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Date : $gmailFilterDate",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = TextPrimary
+                        )
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "• from: dan@tldrnewsletter.com",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "• from: tldr@tldrnewsletter.com",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary
+                        )
                     }
                 }
             }
         }
 
+        // 2. Pré-filtrage par Temps de Lecture
+        item {
+            Text(
+                text = "Pré-filtrage Articles",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextAccent,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "Temps de lecture minimum requis pour l'analyse :",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val options = listOf(0, 3, 5, 10)
+                        options.forEach { minutes ->
+                            val isSelected = minReadingTime == minutes
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.updateMinReadingTime(minutes) },
+                                label = {
+                                    Text(
+                                        text = if (minutes == 0) "0 min (Tout)" else "$minutes min",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = CosmicPrimary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = CosmicSurfaceVariant,
+                                    labelColor = TextPrimary
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Critères de Veille (criteria.md)
         item {
             Text(
                 text = "Critères de Veille (criteria.md)",
@@ -531,36 +611,304 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = CosmicSurface)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "* Architecture Data, Data Engineering, Pipelines de données.\n* Intelligence Artificielle générative, Modèles de langage (LLM), Agents autonomes.\n* Nouveaux outils pour les développeurs, frameworks modernes.\n* RAG, Agent, Agentic.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = qualificationCriteria,
+                        style = MaterialTheme.typography.bodySmall,
                         color = TextPrimary,
-                        lineHeight = 22.sp
+                        maxLines = 6,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 18.sp
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Button(
-                        onClick = {},
+                        onClick = {
+                            criteriaEditInput = qualificationCriteria
+                            showCriteriaDialog = true
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
+                            contentDescription = "Edit Criteria",
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Modifier", color = TextPrimary)
+                        Text("Modifier les critères", color = TextPrimary)
                     }
                 }
             }
         }
+
+        // 4. Thèmes & Catégories (themes.json)
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Thèmes & Catégories (${qualificationThemes.size})",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextAccent,
+                    fontWeight = FontWeight.Bold
+                )
+
+                IconButton(
+                    onClick = {
+                        newThemeInput = ""
+                        showAddThemeDialog = true
+                    },
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(CosmicPrimary)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Ajouter un thème",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        qualificationThemes.forEach { theme ->
+                            InputChip(
+                                selected = false,
+                                onClick = { },
+                                label = { Text(theme, color = TextPrimary, style = MaterialTheme.typography.labelSmall) },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Remove theme",
+                                        tint = SystemRed,
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clickable { viewModel.removeQualificationTheme(theme) }
+                                    )
+                                },
+                                colors = InputChipDefaults.inputChipColors(
+                                    containerColor = CosmicSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 5. Zone de Danger (Purge BDD) tout en bas
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { showClearDataConfirmDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = SystemRed),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(Icons.Default.DeleteSweep, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Remise à zéro de la base de données", color = Color.White)
+            }
+        }
+    }
+
+    // Dialog 1: DatePicker Dialog
+    if (showDatePickerDialog) {
+        DatePickerDialog(
+            onDismissRequest = { showDatePickerDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDatePickerDialog = false
+                        datePickerState.selectedDateMillis?.let { millis ->
+                            val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                                timeInMillis = millis
+                            }
+                            val sdf = SimpleDateFormat("yyyy/MM/dd", Locale.getDefault())
+                            sdf.timeZone = TimeZone.getTimeZone("UTC")
+                            val formattedDate = sdf.format(calendar.time)
+                            viewModel.updateGmailFilterDate(formattedDate)
+                        }
+                    }
+                ) {
+                    Text("OK", color = CosmicPrimary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePickerDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            },
+            colors = DatePickerDefaults.colors(containerColor = CosmicSurface)
+        ) {
+            DatePicker(
+                state = datePickerState,
+                colors = DatePickerDefaults.colors(
+                    containerColor = CosmicSurface,
+                    titleContentColor = TextPrimary,
+                    headlineContentColor = TextPrimary,
+                    weekdayContentColor = TextSecondary,
+                    subheadContentColor = TextSecondary,
+                    yearContentColor = TextPrimary,
+                    currentYearContentColor = CosmicPrimary,
+                    selectedYearContentColor = Color.White,
+                    selectedYearContainerColor = CosmicPrimary,
+                    dayContentColor = TextPrimary,
+                    selectedDayContentColor = Color.White,
+                    selectedDayContainerColor = CosmicPrimary,
+                    todayContentColor = CosmicPrimary,
+                    todayDateBorderColor = CosmicPrimary
+                )
+            )
+        }
+    }
+
+    // Dialog 2: Edit Criteria Dialog
+    if (showCriteriaDialog) {
+        AlertDialog(
+            onDismissRequest = { showCriteriaDialog = false },
+            containerColor = CosmicSurface,
+            title = { Text("Édition des Critères de Veille", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "Rédigez les consignes transmises à Gemini pour évaluer les articles :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = criteriaEditInput,
+                        onValueChange = { criteriaEditInput = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(280.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicPrimary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateQualificationCriteria(criteriaEditInput)
+                        showCriteriaDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                ) {
+                    Text("Enregistrer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCriteriaDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Dialog 3: Add Theme Dialog
+    if (showAddThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddThemeDialog = false },
+            containerColor = CosmicSurface,
+            title = { Text("Nouveau Thème / Catégorie", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                OutlinedTextField(
+                    value = newThemeInput,
+                    onValueChange = { newThemeInput = it },
+                    label = { Text("Nom du thème") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = CosmicPrimary,
+                        unfocusedBorderColor = CosmicSurfaceVariant,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    )
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newThemeInput.isNotBlank()) {
+                            viewModel.addQualificationTheme(newThemeInput)
+                            showAddThemeDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                ) {
+                    Text("Ajouter")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddThemeDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Dialog 4: Clear Data Confirmation Dialog
+    if (showClearDataConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDataConfirmDialog = false },
+            containerColor = CosmicSurface,
+            title = { Text("Réinitialiser la base ?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "Êtes-vous sûr de vouloir supprimer tous les articles et emails stockés en local ? Cette action est irréversible.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showClearDataConfirmDialog = false
+                        viewModel.clearData()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SystemRed)
+                ) {
+                    Text("Confirmer la suppression", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDataConfirmDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
     }
 }
 
