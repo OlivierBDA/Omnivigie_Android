@@ -225,14 +225,32 @@ fun SelectableArticleCard(
         colors = CardDefaults.cardColors(containerColor = CosmicSurface)
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+                .padding(16.dp),
             verticalAlignment = Alignment.Top
         ) {
-            Checkbox(
-                checked = isSelected,
-                onCheckedChange = { onToggle() },
-                colors = CheckboxDefaults.colors(checkedColor = CosmicPrimary)
-            )
+            Column(
+                modifier = Modifier.fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onToggle() },
+                    colors = CheckboxDefaults.colors(checkedColor = CosmicPrimary)
+                )
+                
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = SystemRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
             
             Spacer(modifier = Modifier.width(12.dp))
             
@@ -263,15 +281,19 @@ fun SelectableArticleCard(
                 )
                 
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(article.source, style = MaterialTheme.typography.labelSmall, color = TextAccent)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(article.readingTime, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                Column {
+                    Text(
+                        text = article.source,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextAccent
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = article.readingTime,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
+                    )
                 }
-            }
-            
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = SystemRed, modifier = Modifier.size(20.dp))
             }
         }
     }
