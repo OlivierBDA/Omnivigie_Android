@@ -44,10 +44,10 @@ fun CurationDetailScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     
     val currentThemeArticles = remember(articles, theme) {
-        if (theme == "Non classé") {
-            articles.filter { it.aiThemes.isEmpty() }
-        } else {
-            articles.filter { it.aiThemes.contains(theme) }
+        when (theme) {
+            "Non classé" -> articles.filter { !it.isQualified || it.aiThemes.isEmpty() }
+            "Exclus" -> articles.filter { it.aiThemes.contains("Exclus") || (it.isQualified && it.aiInterest == false) }
+            else -> articles.filter { it.aiThemes.contains(theme) }
         }
     }
 

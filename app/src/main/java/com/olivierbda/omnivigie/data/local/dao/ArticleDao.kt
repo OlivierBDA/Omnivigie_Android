@@ -39,7 +39,7 @@ interface ArticleDao {
     @Query("SELECT * FROM articles WHERE isSentToNotebook = 0 ORDER BY id DESC")
     fun getAllUnsentArticles(): Flow<List<ArticleEntity>>
 
-    @Query("DELETE FROM articles WHERE aiInterest = 0 OR isSentToNotebook = 1 OR aiExplanation LIKE '%trop court%' OR aiExplanation LIKE '%Publicité%'")
+    @Query("DELETE FROM articles WHERE aiThemes LIKE '%Exclus%' OR (isQualified = 1 AND aiInterest = 0)")
     suspend fun cleanupArticles()
 
     @Query("SELECT * FROM articles WHERE aiInterest = 1 AND isSentToNotebook = 0 AND aiThemes LIKE :themePattern ORDER BY id DESC")

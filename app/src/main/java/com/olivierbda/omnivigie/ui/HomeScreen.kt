@@ -199,18 +199,30 @@ fun CurationTab(
     onCleanupClick: () -> Unit,
     onThemeClick: (String) -> Unit
 ) {
+    var showCleanupConfirmDialog by remember { mutableStateOf(false) }
+
     val themes = remember(articles) {
         val themeMap = mutableMapOf<String, Int>()
         articles.forEach { article ->
-            if (article.aiThemes.isEmpty()) {
+            if (!article.isQualified || article.aiThemes.isEmpty()) {
                 themeMap["Non classé"] = (themeMap["Non classé"] ?: 0) + 1
+            } else if (article.aiThemes.contains("Exclus") || article.aiInterest == false) {
+                themeMap["Exclus"] = (themeMap["Exclus"] ?: 0) + 1
             } else {
                 article.aiThemes.forEach { theme ->
                     themeMap[theme] = (themeMap[theme] ?: 0) + 1
                 }
             }
         }
-        themeMap.toList().sortedByDescending { it.second }
+        themeMap.toList().sortedWith(Comparator { a, b ->
+            when {
+                a.first == "Non classé" -> -1
+                b.first == "Non classé" -> 1
+                a.first == "Exclus" -> 1
+                b.first == "Exclus" -> -1
+                else -> b.second.compareTo(a.second)
+            }
+        })
     }
 
     Column(
@@ -231,7 +243,7 @@ fun CurationTab(
             )
             
             IconButton(
-                onClick = onCleanupClick,
+                onClick = { showCleanupConfirmDialog = true },
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
@@ -239,7 +251,7 @@ fun CurationTab(
             ) {
                 Icon(
                     imageVector = Icons.Default.AutoDelete,
-                    contentDescription = "Cleanup",
+                    contentDescription = "Cleanup Exclus",
                     tint = SystemRed,
                     modifier = Modifier.size(20.dp)
                 )
@@ -262,6 +274,37 @@ fun CurationTab(
                 }
             }
         }
+    }
+
+    if (showCleanupConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showCleanupConfirmDialog = false },
+            containerColor = CosmicSurface,
+            title = { Text("Purger les articles exclus ?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "Voulez-vous supprimer définitivement tous les articles classés dans la catégorie 'Exclus' (sponsors, articles trop courts ou rejetés par le LLM) ?",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showCleanupConfirmDialog = false
+                        onCleanupClick()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = SystemRed)
+                ) {
+                    Text("Purger les exclus", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanupConfirmDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
     }
 }
 

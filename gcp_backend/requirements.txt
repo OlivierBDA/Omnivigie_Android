@@ -1,0 +1,6 @@
+functions-framework==3.*
+notebooklm-py==0.4.0
+requests
+google-auth
+google-auth-oauthlib
+pydantic

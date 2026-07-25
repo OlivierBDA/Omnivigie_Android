@@ -1,7 +1,7 @@
 package com.olivierbda.omnivigie.data.repository
 
 import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
+import com.google.ai.client.generativeai.type.QuotaExceededException
 import com.google.gson.Gson
 import com.olivierbda.omnivigie.BuildConfig
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
@@ -65,10 +65,33 @@ class GeminiRepository {
             } else {
                 null
             }
+        } catch (e: QuotaExceededException) {
+            throw e
         } catch (e: Exception) {
+            if (isQuotaException(e)) {
+                throw e
+            }
             e.printStackTrace()
             null
         }
+    }
+
+    private fun isQuotaException(e: Throwable): Boolean {
+        var current: Throwable? = e
+        while (current != null) {
+            val className = current.javaClass.name
+            val message = current.message ?: ""
+            if (current is QuotaExceededException ||
+                className.contains("QuotaExceededException", ignoreCase = true) ||
+                message.contains("Quota exceeded", ignoreCase = true) ||
+                message.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                message.contains("429", ignoreCase = true)
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 
     private fun extractJson(text: String): String? {

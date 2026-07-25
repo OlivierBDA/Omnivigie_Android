@@ -55,31 +55,48 @@ class QualifyArticlesUseCase(
         articles.forEachIndexed { index, article ->
             emit("Analyse article ${index + 1}/${articles.size} : ${article.title}")
 
-            // Pre-filtering: exclude if reading time < minReadingTime min or N/A
+            // Level 1 Pre-filtering: exclude if reading time < minReadingTime min, N/A, or sponsor
             val readingTimeValue = extractMinutes(article.readingTime)
             
-            val updatedArticle = if (article.readingTime.contains("N/A", ignoreCase = true)) {
+            val updatedArticle = if (article.readingTime.contains("N/A", ignoreCase = true) || article.isSponsor) {
                 article.copy(
                     aiInterest = false,
-                    aiExplanation = "Publicité ou contenu non qualifié (N/A).",
+                    aiThemes = listOf("Exclus"),
+                    aiExplanation = "Publicité ou contenu sponsorisé / non qualifié (N/A).",
                     isQualified = true
                 )
             } else if (readingTimeValue != null && minReadingTime > 0 && readingTimeValue < minReadingTime) {
                 article.copy(
                     aiInterest = false,
+                    aiThemes = listOf("Exclus"),
                     aiExplanation = "Article trop court (< $minReadingTime min).",
                     isQualified = true
                 )
             } else {
-                val qualification = geminiRepository.qualifyArticle(article, criteria, themes)
-                if (qualification != null) {
-                    article.copy(
-                        aiInterest = qualification.interest,
-                        aiThemes = qualification.themes,
-                        aiExplanation = qualification.explanation,
-                        isQualified = true
-                    )
-                } else {
+                // Level 2: Gemini LLM Qualification
+                try {
+                    val qualification = geminiRepository.qualifyArticle(article, criteria, themes)
+                    if (qualification != null) {
+                        val isInteresting = qualification.interest
+                        val assignedThemes = if (!isInteresting || qualification.themes.isEmpty()) {
+                            listOf("Exclus")
+                        } else {
+                            qualification.themes
+                        }
+                        article.copy(
+                            aiInterest = isInteresting,
+                            aiThemes = assignedThemes,
+                            aiExplanation = qualification.explanation,
+                            isQualified = true
+                        )
+                    } else {
+                        null
+                    }
+                } catch (e: Exception) {
+                    if (isQuotaException(e)) {
+                        emit("Qualification interrompue (quota API LLM atteint)")
+                        return@flow
+                    }
                     null
                 }
             }
@@ -93,6 +110,24 @@ class QualifyArticlesUseCase(
         
         emit("Qualification terminée.")
     }.flowOn(Dispatchers.IO)
+
+    private fun isQuotaException(e: Throwable): Boolean {
+        var current: Throwable? = e
+        while (current != null) {
+            val className = current.javaClass.name
+            val message = current.message ?: ""
+            if (current is com.google.ai.client.generativeai.type.QuotaExceededException ||
+                className.contains("QuotaExceededException", ignoreCase = true) ||
+                message.contains("Quota exceeded", ignoreCase = true) ||
+                message.contains("RESOURCE_EXHAUSTED", ignoreCase = true) ||
+                message.contains("429", ignoreCase = true)
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
+    }
 
     private fun readAsset(fileName: String): String {
         return context.assets.open(fileName).bufferedReader().use { it.readText() }

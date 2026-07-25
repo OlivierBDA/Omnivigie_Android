@@ -2,6 +2,8 @@ package com.olivierbda.omnivigie.ui
 
 import android.app.Activity
 import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -268,10 +270,19 @@ fun DashboardScreen(viewModel: HomeViewModel) {
                 NotebookItemRow(
                     notebook = notebook,
                     onClick = {
-                        val intent = Intent(context, NotebookAuthActivity::class.java).apply {
-                            notebook.notebookId?.let { putExtra("NOTEBOOK_ID", it) }
+                        val notebookUrl = when {
+                            notebook.notebookId.isNullOrBlank() -> "https://notebooklm.google.com/"
+                            notebook.notebookId.startsWith("http://") || notebook.notebookId.startsWith("https://") -> notebook.notebookId
+                            else -> "https://notebooklm.google.com/notebook/${notebook.notebookId}"
                         }
-                        context.startActivity(intent)
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(notebookUrl)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        try {
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Impossible d'ouvrir l'application NotebookLM : ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 )
             }
