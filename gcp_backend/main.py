@@ -15,11 +15,30 @@ from notebooklm.rpc import AudioLength, AudioFormat
 def save_session_cookies(storage_state_dict):
     """
     Sauvegarde les cookies de session fournis dans le dossier /tmp/notebooklm
-    pour que NotebookLMClient puisse s'authentifier.
+    pour que NotebookLMClient puisse s'authentifier (compatible notebook.google.com).
     """
     profile_dir = os.path.join(NOTEBOOKLM_DIR, "profiles", "default")
     os.makedirs(profile_dir, exist_ok=True)
     
+    # S'assurer que les origines et domaines couvrent à la fois notebook.google.com et notebooklm.google.com
+    if isinstance(storage_state_dict, dict):
+        origins = storage_state_dict.get("origins", [])
+        existing_origins = {o.get("origin") for o in origins if isinstance(o, dict)}
+        
+        for domain_url in ["https://notebook.google.com", "https://notebooklm.google.com"]:
+            if domain_url not in existing_origins:
+                origins.append({
+                    "origin": domain_url,
+                    "localStorage": []
+                })
+        storage_state_dict["origins"] = origins
+
+        # Harmonisation du domaine des cookies en .google.com pour que l'API RPC fonctionne sur tous les endpoints Google
+        for cookie in storage_state_dict.get("cookies", []):
+            if isinstance(cookie, dict) and "domain" in cookie:
+                if cookie["domain"] in ["notebook.google.com", "notebooklm.google.com"]:
+                    cookie["domain"] = ".google.com"
+
     storage_state_path = os.path.join(profile_dir, "storage_state.json")
     with open(storage_state_path, "w", encoding="utf-8") as f:
         json.dump(storage_state_dict, f, ensure_ascii=False, indent=2)

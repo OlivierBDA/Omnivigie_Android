@@ -1,6 +1,6 @@
 # Omnivigie Android - L'Assistant de Veille Technologique Automatisé
 
-**Omnivigie Android** est une application native Android (Kotlin / Jetpack Compose) de veille technologique automatisée. Elle transforme la lecture passive de newsletters IT (ex: *TLDR AI*, *TLDR Tech*) reçues sur Gmail en une chaîne d'analyse intelligente alimentée par **Google Gemini 2.0 Flash Lite** et **Google NotebookLM**.
+**Omnivigie Android** est une application native Android (Kotlin / Jetpack Compose) de veille technologique automatisée. Elle transforme la lecture passive de newsletters IT (ex: *TLDR AI*, *TLDR Tech*) reçues sur Gmail en une chaîne d'analyse intelligente alimentée par **Google Gemini 2.0 Flash Lite** et **Google Gemini Notebook (ex-NotebookLM)**.
 
 ---
 
@@ -28,11 +28,11 @@ Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes 
    - **"Exclus"** (en bas de liste) : Articles rejetés par le Niveau 1 ou le Niveau 2.
    - **Purge ciblée (Poubelle Rouge)** : Un clic sur la poubelle rouge en haut à droite de l'écran Curation supprime **exclusivement** tous les articles de la catégorie **"Exclus"** (avec confirmation). Les articles en "Non classé" restent intacts.
 
-5. **Génération de NotebookLM & Podcast Audio** :
+5. **Génération Gemini Notebook & Podcast Audio** :
    - Sélection d'articles par thème ➔ Clic sur "Création du Notebook".
    - Appel sécurisé du backend GCP (Cloud Function Python `gcp_backend/`).
-   - Création du carnet dans NotebookLM, ajout en lot des URLs sources, attente d'indexation (30s) et lancement de la génération du **Podcast Audio "Deep Dive"** en français.
-   - Clic sur un carnet récent dans le Dashboard ➔ Ouverture directe de l'application officielle **Google NotebookLM** sur le smartphone via deep-linking (`https://notebooklm.google.com/notebook/<ID>`).
+   - Création du carnet dans Gemini Notebook (`https://notebook.google.com/`), ajout en lot des URLs sources, attente d'indexation (30s) et lancement de la génération du **Podcast Audio "Deep Dive"** en français.
+   - Clic sur un carnet récent dans le Dashboard ➔ Ouverture directe de l'application officielle **Google Gemini Notebook** sur le smartphone via deep-linking (`https://notebook.google.com/notebook/<ID>`).
 
 ---
 
@@ -50,39 +50,21 @@ Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes 
 
 ---
 
-## 🏗️ Architecture Technique & Structurante
+## 🏗️ Architecture Technique & Migration Domaine
 
-### 1. Organisation du Code Source Android
-- **`ui/`** : Écrans Compose (`DashboardScreen.kt`, `HomeScreen.kt`, `CurationDetailScreen.kt`, `theme/`).
-- **`ui/viewmodel/`** : `HomeViewModel.kt` gérant l'état UI réactif via `StateFlow`.
-- **`ui/auth/`** : `NotebookAuthActivity.kt` (WebView Android WebKit configurée avec contournement des restrictions Google Accounts, capturant le cookie de session Google NotebookLM et l'enregistrant au format Playwright `storage_state.json`).
-- **`domain/usecase/`** :
-  - `QualifyArticlesUseCase.kt` : Pipeline de qualification 2 niveaux avec détection de quota `QuotaExceededException`.
-  - `CreateThemedNotebookUseCase.kt` : Orchestration de la création du carnet et déclenchement du podcast audio via le backend GCP.
-- **`data/repository/`** :
-  - `GmailRepository.kt` : Synchronisation des emails.
-  - `GeminiRepository.kt` : Appel du SDK Gemini 2.0 Flash Lite et réémission des exceptions de quota (`isQuotaException`).
-  - `NotebookLmRepository.kt` : Interface Retrofit vers la Cloud Function GCP.
-- **`data/local/`** : Base de données **Room** (`OmnivigieDatabase`, `ArticleDao`, `EmailDao`, `SettingDao`, `ArticleEntity`, `EmailEntity`, `SettingEntity`).
-- **`data/auth/`** : `AuthManager.kt` (Credential Manager, Google OAuth2, GCP ID Token IAM) et `SessionManager.kt` (`EncryptedSharedPreferences`).
+### 1. Prise en Charge de la Migration Domaine Google (Gemini Notebook)
+Google a migré le service NotebookLM sous le nom **Gemini Notebook** et la nouvelle URL racine **`https://notebook.google.com/`** :
+- **`NotebookAuthActivity.kt`** : Détecte automatiquement la redirection de domaine vers `notebook.google.com`, extrait les cookies de session `.google.com` (incluant `SID=...`), construit la structure Playwright avec les origines `https://notebook.google.com` et `https://notebooklm.google.com`, sauvegarde l'état de session dans `EncryptedSharedPreferences`, puis se ferme automatiquement (`finish()`).
+- **`DashboardScreen.kt`** : Génère les deep-links `https://notebook.google.com/notebook/<ID>` pour ouvrir l'application officielle sur Android.
 
 ### 2. Backend Hybride GCP (`gcp_backend/`)
-Le dossier `gcp_backend/` contient le code Python déployé sous forme de **Google Cloud Function HTTP** (Python 3.11+, `functions-framework`, `notebooklm-py` 0.4.0) :
-- **Authentification IAM** : La fonction GCP exige un jeton d'identité Google ID Token transmis par l'application Android (`Authorization: Bearer <ID_TOKEN>`).
-- **Session Playwright** : Reçoit l'état de session `notebooklm_storage_state` (capturé par `NotebookAuthActivity`) et le sauvegarde dans `/tmp/notebooklm/profiles/default/storage_state.json`.
-- **Actions supportées (`main.py`)** :
+Le dossier `gcp_backend/` contient le code Python déployé sous forme de **Google Cloud Function HTTP** (Python 3.11+, `functions-framework`, `notebooklm-py>=0.4.0`) :
+- **Authentification IAM** : Exige un jeton d'identité Google ID Token transmis par l'application Android (`Authorization: Bearer <ID_TOKEN>`).
+- **Adaptateur de Session Multi-Domaines (`main.py`)** : Reçoit `notebooklm_storage_state` et harmonise automatiquement les cookies sur le domaine parent `.google.com` ainsi que dans les origines Playwright `/tmp/notebooklm/profiles/default/storage_state.json` pour garantir la compatibilité ascendante et descendante.
+- **Actions supportées** :
   - `action = "create_notebook"` : Crée un carnet titré `[AI] YYYY-MM-DD TLDR-<Thème>`.
   - `action = "add_urls_batch"` : Ajoute les URLs d'articles en lot.
   - `action = "generate_podcast"` : Lance la synthèse audio "Deep Dive" (`AudioLength.LONG`, `AudioFormat.DEEP_DIVE`, langue `fr`).
-
-### 3. Persistance Locale & Clefs de Réglages Room (`SettingEntity`)
-L'application stocke ses paramètres dans la table `settings` (`key`, `value`) avec repli (fallback) automatique :
-- `"last_gmail_sync"` : Horodatage de dernière synchronisation (ex: *"Aujourd'hui à 14:30"*).
-- `"gmail_filter"` : Requête complète Gmail de recherche.
-- `"gmail_filter_date"` : Date `YYYY/MM/DD` sélectionnée via le calendrier.
-- `"qualification_criteria"` : Markdown des critères Gemini (fallback sur `assets/criteria.md`).
-- `"qualification_themes"` : JSON de la liste des thèmes (fallback sur `assets/themes.json`).
-- `"min_reading_time"` : Seuil minimal en minutes pour rejet automatique (par défaut `"5"`).
 
 ---
 
@@ -96,8 +78,8 @@ Omnivigie_Android/
 ├── Omnivigie_FocusTheme.png               # Capture d'écran du Détail d'un Thème
 ├── Omnivigie_Parametres.png               # Capture d'écran de l'écran Paramètres
 ├── gcp_backend/                           # Code Python de la Cloud Function GCP
-│   ├── main.py                            # Handler HTTP Functions Framework & notebooklm-py
-│   └── requirements.txt                   # Dépendances Python (notebooklm-py, functions-framework...)
+│   ├── main.py                            # Handler HTTP & adaptateur de session Multi-domaines
+│   └── requirements.txt                   # Dépendances Python (notebooklm-py>=0.4.0...)
 └── app/
     └── src/main/java/com/olivierbda/omnivigie/
         ├── app/                           # Main Application class & Database Module
@@ -108,7 +90,7 @@ Omnivigie_Android/
         │   └── repository/                # GmailRepository, GeminiRepository, NotebookLmRepository
         ├── domain/usecase/                # QualifyArticlesUseCase & CreateThemedNotebookUseCase
         └── ui/
-            ├── auth/                      # NotebookAuthActivity (WebView Playwright State Capture)
+            ├── auth/                      # NotebookAuthActivity (WebView Multi-Domain Session Capture)
             ├── theme/                     # Palette Cosmic Dark & Composables de style
             ├── viewmodel/                 # HomeViewModel & NotebookSummary
             ├── DashboardScreen.kt         # Écran Dashboard
@@ -123,6 +105,6 @@ Omnivigie_Android/
 - **Langage & Framework** : Kotlin, Jetpack Compose, Coroutines, Flow, StateFlow.
 - **Android SDK** : Compile SDK 37 (Android 15), Target SDK 35, Min SDK 26.
 - **Base de Données Locale** : Room Database, EncryptedSharedPreferences.
-- **IA & APIs** : Google AI SDK (`com.google.ai.client.generativeai` / Gemini 2.0 Flash Lite), Retrofit 2, OkHttp 4, Jsoup.
-- **Backend Cloud** : GCP Cloud Function Python, `notebooklm-py` 0.4.0, Google IAM Authentication.
+- **IA & APIs** : Google AI SDK (Gemini 2.0 Flash Lite), Retrofit 2, OkHttp 4, Jsoup.
+- **Backend Cloud** : GCP Cloud Function Python, `notebooklm-py` (>= 0.4.0), Google IAM Authentication.
 - **Outils de Build** : Gradle 9.4, AGP 9.2, KSP.

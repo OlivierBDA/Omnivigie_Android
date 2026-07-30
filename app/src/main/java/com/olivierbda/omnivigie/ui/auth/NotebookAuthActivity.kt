@@ -49,15 +49,15 @@ class NotebookAuthActivity : ComponentActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                if (url?.contains("notebooklm.google.com") == true) {
+                if (url != null && (url.contains("notebook.google.com") || url.contains("notebooklm.google.com"))) {
                     captureStorageState()
                 }
             }
         }
 
         val notebookUrl = intent.getStringExtra("NOTEBOOK_URL")
-            ?: intent.getStringExtra("NOTEBOOK_ID")?.let { "https://notebooklm.google.com/notebook/$it" }
-            ?: "https://notebooklm.google.com/"
+            ?: intent.getStringExtra("NOTEBOOK_ID")?.let { "https://notebook.google.com/notebook/$it" }
+            ?: "https://notebook.google.com/"
 
         webView.loadUrl(notebookUrl)
         setContentView(webView)
@@ -65,8 +65,9 @@ class NotebookAuthActivity : ComponentActivity() {
 
     private fun captureStorageState() {
         val cookieManager = CookieManager.getInstance()
-        val url = "https://notebooklm.google.com/"
-        val cookiesString = cookieManager.getCookie(url) ?: return
+        val cookiesString = cookieManager.getCookie("https://notebook.google.com/")
+            ?: cookieManager.getCookie("https://notebooklm.google.com/")
+            ?: return
 
         if (!cookiesString.contains("SID=")) return
 
@@ -92,12 +93,24 @@ class NotebookAuthActivity : ComponentActivity() {
             }
 
             storageState.put("cookies", cookiesArray)
-            storageState.put("origins", JSONArray())
+            
+            val originsArray = JSONArray()
+            val origin1 = JSONObject().apply {
+                put("origin", "https://notebook.google.com")
+                put("localStorage", JSONArray())
+            }
+            val origin2 = JSONObject().apply {
+                put("origin", "https://notebooklm.google.com")
+                put("localStorage", JSONArray())
+            }
+            originsArray.put(origin1)
+            originsArray.put(origin2)
+            storageState.put("origins", originsArray)
 
             sessionManager.saveNotebookSession(storageState.toString())
 
             runOnUiThread {
-                Toast.makeText(this, "Session NotebookLM capturée (format Playwright)", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Session Gemini Notebook capturée (format Playwright)", Toast.LENGTH_SHORT).show()
                 finish()
             }
         } catch (e: Exception) {

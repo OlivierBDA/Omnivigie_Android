@@ -271,9 +271,9 @@ fun DashboardScreen(viewModel: HomeViewModel) {
                     notebook = notebook,
                     onClick = {
                         val notebookUrl = when {
-                            notebook.notebookId.isNullOrBlank() -> "https://notebooklm.google.com/"
+                            notebook.notebookId.isNullOrBlank() -> "https://notebook.google.com/"
                             notebook.notebookId.startsWith("http://") || notebook.notebookId.startsWith("https://") -> notebook.notebookId
-                            else -> "https://notebooklm.google.com/notebook/${notebook.notebookId}"
+                            else -> "https://notebook.google.com/notebook/${notebook.notebookId}"
                         }
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(notebookUrl)).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
