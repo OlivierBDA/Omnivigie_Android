@@ -120,7 +120,10 @@ fun DashboardScreen(viewModel: HomeViewModel) {
                     status = notebookStatus,
                     color = notebookColor,
                     modifier = Modifier.weight(1.1f),
-                    onClick = { context.startActivity(Intent(context, NotebookAuthActivity::class.java)) }
+                    onClick = {
+                        android.util.Log.d("NotebookAuth", "Clic sur la pilule NotebookLM du Dashboard -> Lancement de NotebookAuthActivity")
+                        context.startActivity(Intent(context, NotebookAuthActivity::class.java))
+                    }
                 )
             }
         }

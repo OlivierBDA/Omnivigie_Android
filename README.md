@@ -53,14 +53,14 @@ Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes 
 ## 🏗️ Architecture Technique & Migration Domaine
 
 ### 1. Prise en Charge de la Migration Domaine Google (Gemini Notebook)
-Google a migré le service NotebookLM sous le nom **Gemini Notebook** et la nouvelle URL racine **`https://notebook.google.com/`** :
-- **`NotebookAuthActivity.kt`** : Détecte automatiquement la redirection de domaine vers `notebook.google.com`, extrait les cookies de session `.google.com` (incluant `SID=...`), construit la structure Playwright avec les origines `https://notebook.google.com` et `https://notebooklm.google.com`, sauvegarde l'état de session dans `EncryptedSharedPreferences`, puis se ferme automatiquement (`finish()`).
+Google a migré le service sous le nom **Gemini Notebook** et la nouvelle URL racine **`https://notebook.google.com/`** :
+- **`NotebookAuthActivity.kt`** : Détecte l'URL `notebook.google.com`, extrait les cookies de session (`SID`, `OSID`, etc.), construit la structure Playwright avec l'origine `https://notebook.google.com`, sauvegarde l'état de session dans `EncryptedSharedPreferences`, puis se ferme automatiquement (`finish()`).
 - **`DashboardScreen.kt`** : Génère les deep-links `https://notebook.google.com/notebook/<ID>` pour ouvrir l'application officielle sur Android.
 
 ### 2. Backend Hybride GCP (`gcp_backend/`)
 Le dossier `gcp_backend/` contient le code Python déployé sous forme de **Google Cloud Function HTTP** (Python 3.11+, `functions-framework`, `notebooklm-py>=0.4.0`) :
 - **Authentification IAM** : Exige un jeton d'identité Google ID Token transmis par l'application Android (`Authorization: Bearer <ID_TOKEN>`).
-- **Adaptateur de Session Multi-Domaines (`main.py`)** : Reçoit `notebooklm_storage_state` et harmonise automatiquement les cookies sur le domaine parent `.google.com` ainsi que dans les origines Playwright `/tmp/notebooklm/profiles/default/storage_state.json` pour garantir la compatibilité ascendante et descendante.
+- **Gestionnaire de Session (`main.py`)** : Reçoit `notebooklm_storage_state` et formule automatiquement les cookies et l'origine Playwright `/tmp/notebooklm/profiles/default/storage_state.json` exclusivement pour `https://notebook.google.com/`.
 - **Actions supportées** :
   - `action = "create_notebook"` : Crée un carnet titré `[AI] YYYY-MM-DD TLDR-<Thème>`.
   - `action = "add_urls_batch"` : Ajoute les URLs d'articles en lot.
@@ -108,3 +108,10 @@ Omnivigie_Android/
 - **IA & APIs** : Google AI SDK (Gemini 2.0 Flash Lite), Retrofit 2, OkHttp 4, Jsoup.
 - **Backend Cloud** : GCP Cloud Function Python, `notebooklm-py` (>= 0.4.0), Google IAM Authentication.
 - **Outils de Build** : Gradle 9.4, AGP 9.2, KSP.
+
+---
+
+## 📚 Documentation Technique Complémentaire
+
+Pour une explication exhaustive et détaillée sur la gestion des cookies, l'authentification Google, le fonctionnement de la WebView et la résolution de toutes les anomalies rencontrées (ex: *"This browser or app may not be secured"*, `__Secure-1PSIDTS`, etc.), consultez le guide d'architecture :
+- [DOCUMENTATION_NOTEBOOKLM_AUTH.md](file:///c:/Workplace/Dev/Omnivigie_Android/DOCUMENTATION_NOTEBOOKLM_AUTH.md)
