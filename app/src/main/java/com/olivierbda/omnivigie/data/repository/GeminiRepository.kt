@@ -14,6 +14,12 @@ data class AiQualification(
     val explanation: String
 )
 
+data class PodcastRecommendation(
+    val recommendedArticleIds: List<Int>,
+    val explanation: String
+)
+
+
 class GeminiRepository {
     private val modelName = BuildConfig.GEMINI_MODEL
     private val apiKey = BuildConfig.GEMINI_API_KEY
@@ -62,6 +68,55 @@ class GeminiRepository {
             val jsonResponse = response.text?.let { extractJson(it) }
             if (jsonResponse != null) {
                 gson.fromJson(jsonResponse, AiQualification::class.java)
+            } else {
+                null
+            }
+        } catch (e: QuotaExceededException) {
+            throw e
+        } catch (e: Exception) {
+            if (isQuotaException(e)) {
+                throw e
+            }
+            e.printStackTrace()
+            null
+        }
+    }
+
+    suspend fun recommendArticlesForPodcast(
+        theme: String,
+        articles: List<ArticleEntity>
+    ): PodcastRecommendation? = withContext(Dispatchers.IO) {
+        val articlesFormatted = articles.joinToString("\n---\n") { article ->
+            "ID: ${article.id}\nTitre: ${article.title}\nRésumé: ${article.summary}\nSource: ${article.source}"
+        }
+
+        val prompt = """
+            Tu es un assistant expert en curation de contenu et création de podcasts technologiques.
+            
+            CONTEXTE ET OBJECTIF :
+            Nous voulons créer un podcast audio "Deep Dive" fluide et passionnant sur le thème "$theme".
+            Parmi la liste d'articles ci-dessous (tous rattachés au thème "$theme"), trouve entre 5 et 8 articles (ou tous les articles si la liste en compte moins de 5) qui partagent un sujet commun, un fil conducteur fort ou des angles complémentaires particulièrement intéressants à synthétiser ensemble.
+            
+            LISTE DES ARTICLES CANDIDATS :
+            $articlesFormatted
+
+            INSTRUCTIONS :
+            1. Analyse les thèmes secondaires et les sujets abordés dans les résumés.
+            2. Sélectionne entre 5 et 8 articles qui formeront un épisode de podcast cohérent et percutant.
+            3. Rédige une explication claire et synthétique (en français, 2 à 4 phrases) expliquant pourquoi ces articles ont été choisis et quel est leur fil conducteur commun.
+            
+            RÉPONDS EXCLUSIVEMENT AU FORMAT JSON SUIVANT :
+            {
+              "recommendedArticleIds": [12, 15, 18, 22, 30],
+              "explanation": "Ces articles ont été sélectionnés car ils abordent tous..."
+            }
+        """.trimIndent()
+
+        try {
+            val response = generativeModel.generateContent(prompt)
+            val jsonResponse = response.text?.let { extractJson(it) }
+            if (jsonResponse != null) {
+                gson.fromJson(jsonResponse, PodcastRecommendation::class.java)
             } else {
                 null
             }

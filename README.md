@@ -29,10 +29,11 @@ Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes 
    - **Purge ciblée (Poubelle Rouge)** : Un clic sur la poubelle rouge en haut à droite de l'écran Curation supprime **exclusivement** tous les articles de la catégorie **"Exclus"** (avec confirmation). Les articles en "Non classé" restent intacts.
 
 5. **Génération Gemini Notebook & Podcast Audio** :
-   - Sélection d'articles par thème ➔ Clic sur "Création du Notebook".
-   - Appel sécurisé du backend GCP (Cloud Function Python `gcp_backend/`).
+   - **Recommandation d'articles par IA (Focus Thème)** : Dans l'écran de détail d'un thème, un clic sur *"Suggestion d'articles"* envoie les candidats du thème à Gemini 2.0 Flash Lite. L'IA sélectionne entre 5 et 8 articles partageant un fil conducteur commun et justifie son choix. En acceptant, les articles suggérés sont automatiquement cochés et les autres décochés.
+   - **Création du Notebook** : Clic sur *"Création du Notebook"* ➔ Appel sécurisé du backend GCP (Cloud Function Python `gcp_backend/`).
    - Création du carnet dans Gemini Notebook (`https://notebook.google.com/`), ajout en lot des URLs sources, attente d'indexation (30s) et lancement de la génération du **Podcast Audio "Deep Dive"** en français.
    - Clic sur un carnet récent dans le Dashboard ➔ Ouverture directe de l'application officielle **Google Gemini Notebook** sur le smartphone via deep-linking (`https://notebook.google.com/notebook/<ID>`).
+
 
 ---
 
@@ -88,7 +89,8 @@ Omnivigie_Android/
         │   ├── local/                     # Room Database, DAOs & Entities
         │   ├── remote/                    # Retrofit GcpFunctionApiService
         │   └── repository/                # GmailRepository, GeminiRepository, NotebookLmRepository
-        ├── domain/usecase/                # QualifyArticlesUseCase & CreateThemedNotebookUseCase
+        ├── domain/usecase/                # QualifyArticlesUseCase, CreateThemedNotebookUseCase, RecommendArticlesUseCase
+
         └── ui/
             ├── auth/                      # NotebookAuthActivity (WebView Multi-Domain Session Capture)
             ├── theme/                     # Palette Cosmic Dark & Composables de style

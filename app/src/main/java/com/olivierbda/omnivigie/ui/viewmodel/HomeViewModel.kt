@@ -16,6 +16,8 @@ import com.olivierbda.omnivigie.data.repository.GeminiRepository
 import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
 import com.olivierbda.omnivigie.domain.usecase.CreateThemedNotebookUseCase
 import com.olivierbda.omnivigie.domain.usecase.QualifyArticlesUseCase
+import com.olivierbda.omnivigie.domain.usecase.RecommendArticlesUseCase
+import com.olivierbda.omnivigie.domain.usecase.RecommendationResult
 import com.olivierbda.omnivigie.data.remote.GcpFunctionApiService
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
@@ -72,6 +74,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val notebookLmRepository = NotebookLmRepository(gcpFunctionApiService, sessionManager)
     private val createThemedNotebookUseCase = CreateThemedNotebookUseCase(notebookLmRepository, articleDao)
+    private val recommendArticlesUseCase = RecommendArticlesUseCase(geminiRepository)
+
 
     private val DEFAULT_FILTER = "from:dan@tldrnewsletter.com OR from:tldr@tldrnewsletter.com after:2026/06/24"
     
@@ -190,6 +194,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedArticles = MutableStateFlow<Set<Int>>(emptySet())
     val selectedArticles = _selectedArticles.asStateFlow()
 
+    private val _recommendationState = MutableStateFlow<RecommendationResult>(RecommendationResult.Idle)
+    val recommendationState = _recommendationState.asStateFlow()
+
     fun toggleArticleSelection(articleId: Int) {
         _selectedArticles.value = if (_selectedArticles.value.contains(articleId)) {
             _selectedArticles.value - articleId
@@ -205,6 +212,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun deselectAll() {
         _selectedArticles.value = emptySet()
     }
+
+    fun applyRecommendation(recommendedIds: List<Int>, themeArticles: List<ArticleEntity>) {
+        val themeIds = themeArticles.map { it.id }.toSet()
+        val validRecommended = recommendedIds.filter { themeIds.contains(it) }.toSet()
+        _selectedArticles.value = validRecommended
+    }
+
+    fun recommendArticlesForTheme(theme: String, themeArticles: List<ArticleEntity>) {
+        viewModelScope.launch {
+            _recommendationState.value = RecommendationResult.Loading
+            val result = recommendArticlesUseCase.execute(theme, themeArticles)
+            _recommendationState.value = result
+        }
+    }
+
+    fun resetRecommendationState() {
+        _recommendationState.value = RecommendationResult.Idle
+    }
+
 
     fun deleteArticle(article: ArticleEntity) {
         viewModelScope.launch {

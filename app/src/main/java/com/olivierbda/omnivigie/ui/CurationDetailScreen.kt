@@ -10,7 +10,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -22,7 +24,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
+import com.olivierbda.omnivigie.domain.usecase.RecommendationResult
 import com.olivierbda.omnivigie.ui.theme.*
+
 import com.olivierbda.omnivigie.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -39,6 +43,7 @@ fun CurationDetailScreen(
 ) {
     val selectedIds by viewModel.selectedArticles.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
+    val recommendationState by viewModel.recommendationState.collectAsState()
     var showConfirmDialog by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -64,9 +69,10 @@ fun CurationDetailScreen(
                 title = { Text(theme, color = TextPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
+
                 actions = {
                     Text(
                         text = "${selectedIds.intersect(currentThemeArticles.map { it.id }.toSet()).size}/${currentThemeArticles.size}",
@@ -85,19 +91,65 @@ fun CurationDetailScreen(
                     color = CosmicSurface,
                     tonalElevation = 8.dp
                 ) {
-                    Button(
-                        onClick = { showConfirmDialog = true },
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
-                            .height(56.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = selectedIds.intersect(currentThemeArticles.map { it.id }.toSet()).isNotEmpty()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Création du Notebook", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        // Button 1: Suggestion d'articles (Gemini Stars icon)
+                        OutlinedButton(
+                            onClick = { viewModel.recommendArticlesForTheme(theme, currentThemeArticles) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = CosmicPrimary
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, CosmicPrimary),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = null,
+                                tint = CosmicPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Suggestion\nd'articles",
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
+
+                        // Button 2: Création du Notebook (NotebookLM / MenuBook icon)
+                        Button(
+                            onClick = { showConfirmDialog = true },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(52.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = selectedIds.intersect(currentThemeArticles.map { it.id }.toSet()).isNotEmpty()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+
+                            Text(
+                                text = "Création du\nNotebook",
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                lineHeight = 14.sp
+                            )
+                        }
                     }
                 }
             }
@@ -203,6 +255,112 @@ fun CurationDetailScreen(
             }
         )
     }
+
+    when (val state = recommendationState) {
+        is RecommendationResult.Loading -> {
+            AlertDialog(
+                onDismissRequest = { },
+                containerColor = CosmicSurface,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CosmicPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Suggestion par IA", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator(color = CosmicPrimary)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Analyse de ${currentThemeArticles.size} articles par Gemini...",
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                },
+                confirmButton = { }
+            )
+        }
+        is RecommendationResult.Success -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.resetRecommendationState() },
+                containerColor = CosmicSurface,
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CosmicPrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Suggestion d'articles par l'IA", color = TextPrimary, fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column {
+                        Surface(
+                            color = CosmicBackground,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                        ) {
+                            Text(
+                                text = "${state.recommendation.recommendedArticleIds.size} articles sélectionnés sur ${currentThemeArticles.size}",
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = TextAccent,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Pourquoi ces articles :",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = state.recommendation.explanation,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.applyRecommendation(state.recommendation.recommendedArticleIds, currentThemeArticles)
+                            viewModel.resetRecommendationState()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                    ) {
+                        Text("Accepter")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.resetRecommendationState() }) {
+                        Text("Annuler", color = TextSecondary)
+                    }
+                }
+            )
+        }
+        is RecommendationResult.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.resetRecommendationState() },
+                containerColor = CosmicSurface,
+                title = { Text("Erreur de recommandation", color = SystemRed) },
+                text = { Text(state.message, color = TextSecondary) },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.resetRecommendationState() },
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                    ) {
+                        Text("Fermer")
+                    }
+                }
+            )
+        }
+        else -> {}
+    }
 }
 
 @Composable
@@ -265,7 +423,7 @@ fun SelectableArticleCard(
                 if (article.aiExplanation != null) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = article.aiExplanation ?: "",
+                        text = article.aiExplanation,
                         style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
                         color = CosmicTertiary
                     )
