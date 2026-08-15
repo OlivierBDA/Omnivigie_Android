@@ -13,7 +13,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+
+
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +32,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.BorderStroke
+
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import java.text.SimpleDateFormat
@@ -55,8 +63,11 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
     val unsentArticles by viewModel.unsentArticles.collectAsState()
     val syncStatus by viewModel.syncStatus.collectAsState()
     val notebookStatus by viewModel.notebookStatus.collectAsState()
+    val isProcessingOverlayVisible by viewModel.isProcessingOverlayVisible.collectAsState()
+    val processingTitle by viewModel.processingTitle.collectAsState()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
 
     // Refresh notebook status when returning to app
     DisposableEffect(lifecycleOwner) {
@@ -81,114 +92,131 @@ fun HomeScreen(viewModel: HomeViewModel = viewModel()) {
         return
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(Brush.radialGradient(listOf(CosmicPrimary, CosmicSecondary))),
-                            contentAlignment = Alignment.Center
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AutoAwesome,
-                                contentDescription = null,
-                                tint = Color.White,
-                                modifier = Modifier.size(18.dp)
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(Brush.radialGradient(listOf(CosmicPrimary, CosmicSecondary))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "OMNIVIGIE",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 2.sp,
+                                    color = TextPrimary
+                                )
                             )
                         }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = "OMNIVIGIE",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 2.sp,
-                                color = TextPrimary
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = CosmicBackground
+                    )
+                )
+            },
+            bottomBar = {
+                NavigationBar(
+                    containerColor = CosmicSurface,
+                    tonalElevation = 8.dp
+                ) {
+                    NavigationBarItem(
+                        selected = activeTab == 0,
+                        onClick = { activeTab = 0 },
+                        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
+                        label = { Text("Dashboard") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = CosmicPrimary,
+                            selectedTextColor = CosmicPrimary,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = CosmicSurfaceVariant
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = activeTab == 1,
+                        onClick = { activeTab = 1 },
+                        icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Curation") },
+                        label = { Text("Curation") },
+
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = CosmicPrimary,
+                            selectedTextColor = CosmicPrimary,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = CosmicSurfaceVariant
+                        )
+                    )
+                    NavigationBarItem(
+                        selected = activeTab == 2,
+                        onClick = { activeTab = 2 },
+                        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
+                        label = { Text("Paramètres") },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = CosmicPrimary,
+                            selectedTextColor = CosmicPrimary,
+                            unselectedIconColor = TextSecondary,
+                            unselectedTextColor = TextSecondary,
+                            indicatorColor = CosmicSurfaceVariant
+                        )
+                    )
+                }
+            },
+            containerColor = CosmicBackground
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                CosmicBackground,
+                                Color(0xFF07040E)
                             )
                         )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = CosmicBackground
-                )
-            )
-        },
-        bottomBar = {
-            NavigationBar(
-                containerColor = CosmicSurface,
-                tonalElevation = 8.dp
+                    )
             ) {
-                NavigationBarItem(
-                    selected = activeTab == 0,
-                    onClick = { activeTab = 0 },
-                    icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-                    label = { Text("Dashboard") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CosmicPrimary,
-                        selectedTextColor = CosmicPrimary,
-                        unselectedIconColor = TextSecondary,
-                        unselectedTextColor = TextSecondary,
-                        indicatorColor = CosmicSurfaceVariant
+                when (activeTab) {
+                    0 -> DashboardScreen(viewModel = viewModel)
+                    1 -> CurationTab(
+                        articles = unsentArticles,
+                        onCleanupClick = { viewModel.cleanupArticles() },
+                        onThemeClick = { theme -> selectedThemeForDetail = theme }
                     )
-                )
-                NavigationBarItem(
-                    selected = activeTab == 1,
-                    onClick = { activeTab = 1 },
-                    icon = { Icon(Icons.Default.LibraryBooks, contentDescription = "Curation") },
-                    label = { Text("Curation") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CosmicPrimary,
-                        selectedTextColor = CosmicPrimary,
-                        unselectedIconColor = TextSecondary,
-                        unselectedTextColor = TextSecondary,
-                        indicatorColor = CosmicSurfaceVariant
-                    )
-                )
-                NavigationBarItem(
-                    selected = activeTab == 2,
-                    onClick = { activeTab = 2 },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-                    label = { Text("Paramètres") },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedIconColor = CosmicPrimary,
-                        selectedTextColor = CosmicPrimary,
-                        unselectedIconColor = TextSecondary,
-                        unselectedTextColor = TextSecondary,
-                        indicatorColor = CosmicSurfaceVariant
-                    )
-                )
+                    2 -> SettingsTab(viewModel)
+                }
             }
-        },
-        containerColor = CosmicBackground
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            CosmicBackground,
-                            Color(0xFF07040E)
-                        )
-                    )
-                )
+        }
+
+        AnimatedVisibility(
+            visible = isProcessingOverlayVisible,
+            enter = fadeIn(),
+            exit = fadeOut()
         ) {
-            when (activeTab) {
-                0 -> DashboardScreen(viewModel = viewModel)
-                1 -> CurationTab(
-                    articles = unsentArticles,
-                    onCleanupClick = { viewModel.cleanupArticles() },
-                    onThemeClick = { theme -> selectedThemeForDetail = theme }
-                )
-                2 -> SettingsTab(viewModel)
-            }
+            ProcessingVideoScreen(
+                title = processingTitle,
+                status = syncStatus,
+                onDismiss = {
+                    viewModel.hideProcessingOverlay()
+                }
+            )
         }
     }
 }
@@ -393,7 +421,7 @@ fun ArticleCard(article: ArticleEntity) {
             if (article.aiExplanation != null) {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = article.aiExplanation ?: "",
+                    text = article.aiExplanation,
                     style = MaterialTheme.typography.bodySmall.copy(fontStyle = androidx.compose.ui.text.font.FontStyle.Italic),
                     color = CosmicPrimary
                 )
@@ -461,12 +489,13 @@ fun ArticleCard(article: ArticleEntity) {
                             .background(CosmicSurfaceVariant)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Launch,
+                            imageVector = Icons.AutoMirrored.Filled.Launch,
                             contentDescription = "Open URL",
                             tint = CosmicTertiary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
+
                     
                     IconButton(
                         onClick = {},
@@ -496,6 +525,10 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
     val qualificationCriteria by viewModel.qualificationCriteria.collectAsState()
     val qualificationThemes by viewModel.qualificationThemes.collectAsState()
     val minReadingTime by viewModel.minReadingTime.collectAsState()
+    val geminiApiKey by viewModel.geminiApiKey.collectAsState()
+    val geminiModel by viewModel.geminiModel.collectAsState()
+    val isTestingLlm by viewModel.isTestingLlm.collectAsState()
+    val llmTestResult by viewModel.llmTestResult.collectAsState()
 
     var showCriteriaDialog by remember { mutableStateOf(false) }
     var showAddThemeDialog by remember { mutableStateOf(false) }
@@ -503,6 +536,12 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
     var showClearDataConfirmDialog by remember { mutableStateOf(false) }
     var newThemeInput by remember { mutableStateOf("") }
     var criteriaEditInput by remember { mutableStateOf("") }
+    var apiKeyInput by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
+    var modelInput by remember(geminiModel) { mutableStateOf(geminiModel) }
+    var isApiKeyVisible by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+
 
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = System.currentTimeMillis()
@@ -583,7 +622,187 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
             }
         }
 
-        // 2. Pré-filtrage par Temps de Lecture
+        // 2. Configuration du Modèle LLM (Google Gemini)
+        item {
+            Text(
+                text = "Configuration du Modèle LLM (Gemini)",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextAccent,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Paramètres de connexion à l'API Gemini pour la qualification et la suggestion d'articles :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    // Nom du modèle
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Modèle LLM :",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        OutlinedTextField(
+                            value = modelInput,
+                            onValueChange = { 
+                                modelInput = it
+                                viewModel.updateGeminiModel(it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("ex: gemini-2.0-flash-lite") },
+                            singleLine = true,
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = {
+                                        val intent = Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://ai.google.dev/gemini-api/docs/models?hl=fr")
+                                        )
+                                        context.startActivity(intent)
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Launch,
+                                        contentDescription = "Voir la documentation des modèles Gemini",
+                                        tint = CosmicTertiary
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CosmicPrimary,
+                                unfocusedBorderColor = CosmicSurfaceVariant,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            )
+                        )
+                    }
+
+
+                    // Clé API Gemini
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Clé API Gemini :",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        OutlinedTextField(
+                            value = apiKeyInput,
+                            onValueChange = { 
+                                apiKeyInput = it
+                                viewModel.updateGeminiApiKey(it)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = { Text("Clé API Google AI Studio") },
+                            singleLine = true,
+                            visualTransformation = if (isApiKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { isApiKeyVisible = !isApiKeyVisible }) {
+                                    Icon(
+                                        imageVector = if (isApiKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Afficher/Masquer la clé",
+                                        tint = TextSecondary
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CosmicPrimary,
+                                unfocusedBorderColor = CosmicSurfaceVariant,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            )
+                        )
+                    }
+
+                    // Bouton Tester
+                    Button(
+                        onClick = { viewModel.testLlmConnection(apiKeyInput, modelInput) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = CosmicSurfaceVariant),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isTestingLlm
+                    ) {
+                        if (isTestingLlm) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = CosmicTertiary,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Test en cours...", color = TextPrimary)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = CosmicTertiary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Tester la connexion LLM", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    // Résultat du test
+                    llmTestResult?.let { result ->
+                        val isSuccess = result.startsWith("Succès")
+                        Surface(
+                            color = if (isSuccess) SystemGreen.copy(alpha = 0.15f) else SystemRed.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, if (isSuccess) SystemGreen else SystemRed),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = if (isSuccess) SystemGreen else SystemRed,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = result,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (isSuccess) SystemGreen else SystemRed,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(
+                                    onClick = { viewModel.clearLlmTestResult() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Fermer",
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Pré-filtrage par Temps de Lecture
         item {
             Text(
                 text = "Pré-filtrage Articles",
@@ -592,6 +811,7 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
                 fontWeight = FontWeight.Bold
             )
         }
+
 
         item {
             Card(

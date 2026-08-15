@@ -118,6 +118,12 @@ dependencies {
     // Google Sign-In for Gmail OAuth
     implementation("com.google.android.gms:play-services-auth:21.0.0")
 
+    // AndroidX Media3 (ExoPlayer for fullscreen background video)
+    val media3Version = "1.5.1"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")

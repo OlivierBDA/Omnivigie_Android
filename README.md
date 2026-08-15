@@ -67,6 +67,12 @@ Le dossier `gcp_backend/` contient le code Python déployé sous forme de **Goog
   - `action = "add_urls_batch"` : Ajoute les URLs d'articles en lot.
   - `action = "generate_podcast"` : Lance la synthèse audio "Deep Dive" (`AudioLength.LONG`, `AudioFormat.DEEP_DIVE`, langue `fr`).
 
+### 3. Écran de Traitement Immersif (Vidéo & HUD Glassmorphic)
+- **`ProcessingVideoScreen.kt`** : Lors des temps de traitement (synchronisation Gmail, qualification Gemini, création de carnets NotebookLM), une vidéo d'animation est lue en boucle en arrière-plan plein écran (via **AndroidX Media3 ExoPlayer**). Un bandeau d'interface translucide (*Glassmorphism*) affiche en sur-impression le statut en temps réel avec un bouton de fermeture ou de validation en fin d'opération.
+
+### 4. Configuration Avancée du LLM (Paramètres)
+- **Personnalisation du Modèle & Clé API** : L'écran Paramètres permet de configurer dynamiquement la clé API Google Gemini et le modèle à utiliser (avec lien direct vers la documentation officielle des modèles et bouton de test de connexion immédiat).
+
 ---
 
 ## 📂 Arborescence du Projet
@@ -86,18 +92,19 @@ Omnivigie_Android/
         ├── app/                           # Main Application class & Database Module
         ├── data/
         │   ├── auth/                      # AuthManager (OAuth2, IAM) & SessionManager (EncryptedSharedPref)
+        │   ├── extraction/                # ArticleExtractor (Jsoup)
         │   ├── local/                     # Room Database, DAOs & Entities
         │   ├── remote/                    # Retrofit GcpFunctionApiService
         │   └── repository/                # GmailRepository, GeminiRepository, NotebookLmRepository
         ├── domain/usecase/                # QualifyArticlesUseCase, CreateThemedNotebookUseCase, RecommendArticlesUseCase
-
         └── ui/
             ├── auth/                      # NotebookAuthActivity (WebView Multi-Domain Session Capture)
             ├── theme/                     # Palette Cosmic Dark & Composables de style
             ├── viewmodel/                 # HomeViewModel & NotebookSummary
             ├── DashboardScreen.kt         # Écran Dashboard
             ├── HomeScreen.kt              # Écran Principal (Tabs, Curation, Settings)
-            └── CurationDetailScreen.kt    # Écran de sélection des fiches par thème
+            ├── CurationDetailScreen.kt    # Écran de sélection des fiches par thème
+            └── ProcessingVideoScreen.kt   # Écran immersif vidéo plein écran & HUD de progression
 ```
 
 ---
@@ -106,10 +113,12 @@ Omnivigie_Android/
 
 - **Langage & Framework** : Kotlin, Jetpack Compose, Coroutines, Flow, StateFlow.
 - **Android SDK** : Compile SDK 37 (Android 15), Target SDK 35, Min SDK 26.
+- **Multimédia & Vidéo** : AndroidX Media3 (ExoPlayer 1.5.1).
 - **Base de Données Locale** : Room Database, EncryptedSharedPreferences.
 - **IA & APIs** : Google AI SDK (Gemini 2.0 Flash Lite), Retrofit 2, OkHttp 4, Jsoup.
 - **Backend Cloud** : GCP Cloud Function Python, `notebooklm-py` (>= 0.4.0), Google IAM Authentication.
 - **Outils de Build** : Gradle 9.4, AGP 9.2, KSP.
+
 
 ---
 

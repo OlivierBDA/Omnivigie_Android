@@ -54,8 +54,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     private val authManager = AuthManager(application)
     private val gmailRepository = GmailRepository(emailDao, articleDao)
-    private val geminiRepository = GeminiRepository()
+    private val geminiRepository = GeminiRepository(settingDao)
     private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, settingDao, geminiRepository)
+
     
     private val sessionManager = SessionManager(application)
     
@@ -181,7 +182,54 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .map { it ?: extractDateFromFilter(gmailFilter.value) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "2026/06/24")
 
+    val geminiApiKey: StateFlow<String> = settingDao.getSetting("gemini_api_key")
+        .map { it ?: com.olivierbda.omnivigie.BuildConfig.GEMINI_API_KEY }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.olivierbda.omnivigie.BuildConfig.GEMINI_API_KEY)
+
+    val geminiModel: StateFlow<String> = settingDao.getSetting("gemini_model")
+        .map { it ?: com.olivierbda.omnivigie.BuildConfig.GEMINI_MODEL.ifBlank { "gemini-2.0-flash-lite" } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.olivierbda.omnivigie.BuildConfig.GEMINI_MODEL.ifBlank { "gemini-2.0-flash-lite" })
+
+    private val _isTestingLlm = MutableStateFlow(false)
+    val isTestingLlm = _isTestingLlm.asStateFlow()
+
+    private val _llmTestResult = MutableStateFlow<String?>(null)
+    val llmTestResult = _llmTestResult.asStateFlow()
+
+    fun updateGeminiApiKey(newKey: String) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("gemini_api_key", newKey.trim()))
+        }
+    }
+
+    fun updateGeminiModel(newModel: String) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("gemini_model", newModel.trim()))
+        }
+    }
+
+    fun testLlmConnection(customApiKey: String? = null, customModelName: String? = null) {
+        viewModelScope.launch {
+            _isTestingLlm.value = true
+            _llmTestResult.value = null
+            try {
+                val response = geminiRepository.testConnection(customApiKey, customModelName)
+                _llmTestResult.value = "Succès : $response"
+            } catch (e: Exception) {
+                val errorMsg = e.localizedMessage ?: e.message ?: "Erreur inconnue"
+                _llmTestResult.value = "Échec : $errorMsg"
+            } finally {
+                _isTestingLlm.value = false
+            }
+        }
+    }
+
+    fun clearLlmTestResult() {
+        _llmTestResult.value = null
+    }
+
     private fun extractDateFromFilter(filter: String): String {
+
         val pattern = Pattern.compile("after:(\\d{4}/\\d{2}/\\d{2})")
         val matcher = pattern.matcher(filter)
         return if (matcher.find()) {
@@ -241,8 +289,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _syncStatus = MutableStateFlow<String?>(null)
     val syncStatus = _syncStatus.asStateFlow()
 
+    private val _isProcessingOverlayVisible = MutableStateFlow(false)
+    val isProcessingOverlayVisible = _isProcessingOverlayVisible.asStateFlow()
+
+    private val _processingTitle = MutableStateFlow("Traitement en cours")
+    val processingTitle = _processingTitle.asStateFlow()
+
+    fun showProcessingOverlay(title: String = "Traitement en cours") {
+        _processingTitle.value = title
+        _isProcessingOverlayVisible.value = true
+    }
+
+    fun hideProcessingOverlay() {
+        _isProcessingOverlayVisible.value = false
+        _syncStatus.value = null
+    }
+
     private val _notebookStatus = MutableStateFlow("Vérification...")
     val notebookStatus = _notebookStatus.asStateFlow()
+
 
     private val _gcpStatus = MutableStateFlow("Prêt")
     val gcpStatus = _gcpStatus.asStateFlow()
@@ -329,12 +394,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     fun syncAndProcessVeille(activity: Activity) {
         viewModelScope.launch {
+            showProcessingOverlay("Veille Technologique (Gmail & IA)")
             _syncStatus.value = "Authentification Gmail..."
             val credential = authManager.signIn(activity)
             if (credential == null) {
                 _syncStatus.value = "Échec de connexion Google"
                 return@launch
             }
+
 
             _syncStatus.value = "Vérification des autorisations..."
             val authResult = authManager.authorizeGmail(activity)
@@ -432,6 +499,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun qualifyArticles() {
         viewModelScope.launch {
+            showProcessingOverlay("Qualification IA (Gemini 2.0)")
             qualifyArticlesUseCase.execute().collectLatest { status ->
                 _syncStatus.value = status
             }
@@ -445,6 +513,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
+            showProcessingOverlay("Création Carnet & Podcast NotebookLM")
             _syncStatus.value = "Authentification IAM GCP..."
             val idToken = authManager.getGcpIdToken(activity)
             if (idToken == null) {
@@ -460,6 +529,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
 
     fun cleanupArticles() {
         viewModelScope.launch {

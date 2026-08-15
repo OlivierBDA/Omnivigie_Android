@@ -8,6 +8,8 @@ import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+import com.olivierbda.omnivigie.data.local.dao.SettingDao
+
 data class AiQualification(
     val interest: Boolean,
     val themes: List<String>,
@@ -20,21 +22,47 @@ data class PodcastRecommendation(
 )
 
 
-class GeminiRepository {
-    private val modelName = BuildConfig.GEMINI_MODEL
-    private val apiKey = BuildConfig.GEMINI_API_KEY
+class GeminiRepository(
+    private val settingDao: SettingDao? = null
+) {
+    private val defaultModelName = BuildConfig.GEMINI_MODEL.ifBlank { "gemini-2.0-flash-lite" }
+    private val defaultApiKey = BuildConfig.GEMINI_API_KEY
     private val gson = Gson()
 
-    private val generativeModel = GenerativeModel(
-        modelName = modelName,
-        apiKey = apiKey
-    )
+    suspend fun getGenerativeModel(customApiKey: String? = null, customModelName: String? = null): GenerativeModel {
+        val apiKey = if (!customApiKey.isNullOrBlank()) {
+            customApiKey.trim()
+        } else {
+            val savedKey = settingDao?.getSettingValue("gemini_api_key")
+            if (!savedKey.isNullOrBlank()) savedKey.trim() else defaultApiKey.trim()
+        }
+
+        val modelName = if (!customModelName.isNullOrBlank()) {
+            customModelName.trim()
+        } else {
+            val savedModel = settingDao?.getSettingValue("gemini_model")
+            if (!savedModel.isNullOrBlank()) savedModel.trim() else defaultModelName.trim()
+        }
+
+        return GenerativeModel(
+            modelName = modelName,
+            apiKey = apiKey
+        )
+    }
+
+    suspend fun testConnection(customApiKey: String? = null, customModelName: String? = null): String = withContext(Dispatchers.IO) {
+        val model = getGenerativeModel(customApiKey, customModelName)
+        val prompt = "Réponds brièvement et cordialement en une phrase pour confirmer que la connexion avec l'API Gemini et le modèle fonctionne parfaitement."
+        val response = model.generateContent(prompt)
+        response.text?.trim() ?: "Connexion établie avec succès (réponse vide reçue)."
+    }
 
     suspend fun qualifyArticle(
         article: ArticleEntity,
         criteria: String,
         themes: List<String>
     ): AiQualification? = withContext(Dispatchers.IO) {
+
         val prompt = """
             Tu es un assistant expert en veille technologique spécialisé en Data et Intelligence Artificielle.
             Ta mission est d'évaluer la pertinence d'un article pour un professionnel du domaine.
@@ -64,7 +92,8 @@ class GeminiRepository {
         """.trimIndent()
 
         try {
-            val response = generativeModel.generateContent(prompt)
+            val model = getGenerativeModel()
+            val response = model.generateContent(prompt)
             val jsonResponse = response.text?.let { extractJson(it) }
             if (jsonResponse != null) {
                 gson.fromJson(jsonResponse, AiQualification::class.java)
@@ -113,8 +142,10 @@ class GeminiRepository {
         """.trimIndent()
 
         try {
-            val response = generativeModel.generateContent(prompt)
+            val model = getGenerativeModel()
+            val response = model.generateContent(prompt)
             val jsonResponse = response.text?.let { extractJson(it) }
+
             if (jsonResponse != null) {
                 gson.fromJson(jsonResponse, PodcastRecommendation::class.java)
             } else {

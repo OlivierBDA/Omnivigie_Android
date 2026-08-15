@@ -55,17 +55,21 @@ class QualifyArticlesUseCase(
         articles.forEachIndexed { index, article ->
             emit("Analyse article ${index + 1}/${articles.size} : ${article.title}")
 
-            // Level 1 Pre-filtering: exclude if reading time < minReadingTime min, N/A, or sponsor
+            // Level 1 Pre-filtering: exclude if reading time < minReadingTime min, N/A, blank, or sponsor
             val readingTimeValue = extractMinutes(article.readingTime)
+            val isNaOrEmpty = article.readingTime.isBlank() || 
+                              article.readingTime.contains("N/A", ignoreCase = true) || 
+                              readingTimeValue == null
             
-            val updatedArticle = if (article.readingTime.contains("N/A", ignoreCase = true) || article.isSponsor) {
+            val updatedArticle = if (isNaOrEmpty || article.isSponsor) {
                 article.copy(
                     aiInterest = false,
                     aiThemes = listOf("Exclus"),
-                    aiExplanation = "Publicité ou contenu sponsorisé / non qualifié (N/A).",
+                    aiExplanation = if (article.isSponsor) "Publicité ou contenu sponsorisé." else "Article sans temps de lecture (N/A) / publicité.",
                     isQualified = true
                 )
-            } else if (readingTimeValue != null && minReadingTime > 0 && readingTimeValue < minReadingTime) {
+            } else if (minReadingTime > 0 && readingTimeValue < minReadingTime) {
+
                 article.copy(
                     aiInterest = false,
                     aiThemes = listOf("Exclus"),
@@ -73,6 +77,7 @@ class QualifyArticlesUseCase(
                     isQualified = true
                 )
             } else {
+
                 // Level 2: Gemini LLM Qualification
                 try {
                     val qualification = geminiRepository.qualifyArticle(article, criteria, themes)

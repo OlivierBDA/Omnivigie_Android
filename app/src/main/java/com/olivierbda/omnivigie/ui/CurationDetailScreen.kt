@@ -213,48 +213,18 @@ fun CurationDetailScreen(
     }
 
     if (isProcessing) {
-        AlertDialog(
-            onDismissRequest = { },
-            containerColor = CosmicSurface,
-            title = { Text("Carnet NotebookLM", color = TextPrimary) },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    val isDone = syncStatus?.startsWith("Terminé") == true
-                    val isError = syncStatus?.startsWith("Erreur") == true || syncStatus?.startsWith("Échec") == true
-                    
-                    if (!isDone && !isError) {
-                        CircularProgressIndicator(color = CosmicPrimary)
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                    
-                    Text(
-                        text = syncStatus ?: "Initialisation...",
-                        color = if (isError) SystemRed else TextSecondary,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            },
-            confirmButton = {
-                val isDone = syncStatus?.startsWith("Terminé") == true
-                val isError = syncStatus?.startsWith("Erreur") == true || syncStatus?.startsWith("Échec") == true
-                
-                if (isDone || isError) {
-                    Button(
-                        onClick = { 
-                            isProcessing = false
-                            if (isDone) onBack()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
-                    ) {
-                        Text("Fermer")
-                    }
-                }
+        val isDone = syncStatus?.startsWith("Terminé", ignoreCase = true) == true
+        ProcessingVideoScreen(
+            title = "Création Carnet Gemini Notebook",
+            status = syncStatus,
+            onDismiss = {
+                isProcessing = false
+                viewModel.hideProcessingOverlay()
+                if (isDone) onBack()
             }
         )
     }
+
 
     when (val state = recommendationState) {
         is RecommendationResult.Loading -> {

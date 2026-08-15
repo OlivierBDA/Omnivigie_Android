@@ -76,6 +76,8 @@ class ArticleExtractor {
                 summary = textBlock.text().replace(titleFull, "").trim()
             }
             
+            val isPreExcluded = isSponsor || readingTime == "N/A" || readingTime.isBlank()
+
             if (isValidArticle(title, urlClean)) {
                 articles.add(
                     ArticleEntity(
@@ -85,11 +87,18 @@ class ArticleExtractor {
                         source = email.sender,
                         readingTime = readingTime,
                         summary = summary.take(1000),
-                        isSponsor = isSponsor
+                        isSponsor = isSponsor,
+                        aiInterest = if (isPreExcluded) false else null,
+                        aiThemes = if (isPreExcluded) listOf("Exclus") else emptyList(),
+                        aiExplanation = if (isPreExcluded) {
+                            if (isSponsor) "Publicité ou contenu sponsorisé." else "Article sans temps de lecture (N/A) / publicité."
+                        } else null,
+                        isQualified = isPreExcluded
                     )
                 )
             }
         }
+
 
         return articles.distinctBy { it.url }
     }

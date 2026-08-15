@@ -21,11 +21,12 @@ interface ArticleDao {
     @Query("SELECT * FROM articles WHERE emailId = :emailId")
     suspend fun getArticlesByEmail(emailId: String): List<ArticleEntity>
 
-    @Query("SELECT * FROM articles WHERE isQualified = 0 AND isSponsor = 0")
+    @Query("SELECT * FROM articles WHERE isQualified = 0")
     suspend fun getUnqualifiedArticles(): List<ArticleEntity>
 
-    @Query("SELECT COUNT(*) FROM articles WHERE isQualified = 0 AND isSponsor = 0")
+    @Query("SELECT COUNT(*) FROM articles WHERE isQualified = 0")
     fun getUnqualifiedCount(): Flow<Int>
+
 
     @Query("SELECT COUNT(*) FROM articles WHERE aiInterest = 1 AND isSentToNotebook = 0")
     fun getPendingQualifiedCount(): Flow<Int>
