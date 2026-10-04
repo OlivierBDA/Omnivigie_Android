@@ -17,10 +17,13 @@ Omnivigie orchestre l'ensemble du pipeline de veille technologique en 5 grandes 
    - Parsing HTML haute précision pour isoler chaque article (titre, URL, résumé, temps de lecture, détection des sponsors).
    - Nettoyage automatique des URLs (suppression des paramètres de tracking UTM).
 
-3. **Qualification par IA (Google Gemini 2.0 Flash Lite)** :
+3. **Qualification par IA & Rétention des Articles (On-Device AICore TPU & Cloud API)** :
+   - **Niveau 0 (Rétention & Expiration)** : Dès le lancement de l'action *"Sync & Traiter la veille"*, les articles dont la date de réception est plus ancienne que le seuil de rétention configuré (`articleRetentionDays`, 30 jours par défaut dans l'onglet Paramètres) sont immédiatement basculés dans la catégorie **"Exclus"** sans consommer de quota LLM.
    - **Niveau 1 (Pré-filtrage)** : Les articles ayant un temps de lecture inférieur au seuil (`minReadingTime`), marqués "N/A" ou sponsors sont immédiatement qualifiés avec `aiInterest = false` et basculés dans la catégorie **"Exclus"**.
-   - **Niveau 2 (Qualification LLM)** : Évaluation de chaque article par rapport aux consignes (`qualification_criteria` / `criteria.md`) et thèmes autorisés (`qualification_themes` / `themes.json`). Les articles rejetés par le LLM ou sans thème correspondant sont basculés dans **"Exclus"**.
-   - **Gestion des Quotas API LLM (`QuotaExceededException` / Error 429)** : Si le quota d'appel API Gemini est dépassé, l'erreur est interceptée, la qualification est **interrompue immédiatement** et un message d'alerte *"Qualification interrompue (quota API LLM atteint)"* s'affiche sur le Dashboard. Les articles non encore analysés restent en **"Non classé"** pour être repris lors du prochain traitement.
+   - **Niveau 2 (Classification Hybride On-Device / Cloud)** :
+     - **Mode Local par défaut (Android AICore / ML Kit GenAI Prompt API)** : Inférence exécutée directement sur le TPU Tensor d'un Pixel 10 Pro avec le modèle **Gemini Nano 4 Fast** (E2B / faible latence, température déterministe `0.1`). Confidentialité totale, zéro latence réseau et aucune consommation de quota d'API.
+     - **Fallback Automatique & Sélecteur de Moteur** : Si le modèle AICore n'est pas encore téléchargé ou indisponible, l'application bascule automatiquement sur l'API distante **Google Gemini 2.0 Flash Lite**. Un commutateur dans les Paramètres permet également de forcer l'un ou l'autre des moteurs à tout moment.
+   - **Gestion des Quotas API LLM (`QuotaExceededException` / Error 429)** : En cas d'utilisation de l'API Cloud (ou de fallback) et si le quota d'appel API Gemini est dépassé, l'erreur est interceptée, la qualification est **interrompue immédiatement** et un message d'alerte *"Qualification interrompue (quota API LLM atteint)"* s'affiche sur le Dashboard. Les articles non encore analysés restent en **"Non classé"** pour être repris lors du prochain traitement.
 
 4. **Curation & Gestion des Catégories** :
    - **"Non classé"** (en haut de liste) : Articles fraîchement récupérés en attente de qualification.

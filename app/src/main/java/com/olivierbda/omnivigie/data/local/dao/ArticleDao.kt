@@ -56,8 +56,20 @@ interface ArticleDao {
     @Query("SELECT * FROM articles WHERE id IN (:articleIds)")
     suspend fun getArticlesByIds(articleIds: List<Int>): List<ArticleEntity>
 
+    @Query("""
+        SELECT a.* FROM articles a
+        INNER JOIN emails e ON a.emailId = e.id
+        WHERE a.isSentToNotebook = 0
+          AND (a.aiThemes NOT LIKE '%Exclus%' OR a.aiThemes IS NULL OR a.isQualified = 0)
+          AND e.receivedDate < :cutoffTimestamp
+    """)
+    suspend fun getArticlesOlderThan(cutoffTimestamp: Long): List<ArticleEntity>
+
     @Update
     suspend fun updateArticle(article: ArticleEntity)
+
+    @Update
+    suspend fun updateArticles(articles: List<ArticleEntity>)
 
     @Delete
     suspend fun deleteArticle(article: ArticleEntity)

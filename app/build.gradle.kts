@@ -100,8 +100,11 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-scalars:3.0.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Google AI SDK (for Gemini API calls)
+    // Google AI SDK (for Gemini API calls - Suggestion Notebook)
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+
+    // ML Kit GenAI Prompt API (for On-Device Gemini Nano / AICore - Classification)
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
 
     // Jsoup (for parsing newsletter HTML bodies in Kotlin)
     implementation("org.jsoup:jsoup:1.17.2")

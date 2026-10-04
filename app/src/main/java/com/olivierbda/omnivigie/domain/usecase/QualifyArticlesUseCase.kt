@@ -13,12 +13,15 @@ import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
 
 import com.olivierbda.omnivigie.data.local.dao.SettingDao
+import com.olivierbda.omnivigie.data.repository.AiCoreRepository
+import com.olivierbda.omnivigie.data.repository.AiCoreStatus
 
 class QualifyArticlesUseCase(
     private val context: Context,
     private val articleDao: ArticleDao,
     private val settingDao: SettingDao,
-    private val geminiRepository: GeminiRepository
+    private val geminiRepository: GeminiRepository,
+    private val aiCoreRepository: AiCoreRepository
 ) {
     private val gson = Gson()
 
@@ -41,6 +44,30 @@ class QualifyArticlesUseCase(
         val customMinReadingTime = withContext(Dispatchers.IO) { settingDao.getSettingValue("min_reading_time") }
         val minReadingTime = customMinReadingTime?.toIntOrNull() ?: 5
 
+        val customRetentionDays = withContext(Dispatchers.IO) { settingDao.getSettingValue("article_retention_days") }
+        val retentionDays = customRetentionDays?.toIntOrNull() ?: 30
+
+        if (retentionDays > 0) {
+            val cutoffTimestamp = System.currentTimeMillis() - (retentionDays.toLong() * 24L * 60L * 60L * 1000L)
+            val oldArticles = withContext(Dispatchers.IO) {
+                articleDao.getArticlesOlderThan(cutoffTimestamp)
+            }
+            if (oldArticles.isNotEmpty()) {
+                emit("Exclusion de ${oldArticles.size} articles trop anciens (> $retentionDays jours)...")
+                val updatedOldArticles = oldArticles.map {
+                    it.copy(
+                        aiInterest = false,
+                        aiThemes = listOf("Exclus"),
+                        aiExplanation = "Article trop ancien (> $retentionDays jours).",
+                        isQualified = true
+                    )
+                }
+                withContext(Dispatchers.IO) {
+                    articleDao.updateArticles(updatedOldArticles)
+                }
+            }
+        }
+
         val articles = withContext(Dispatchers.IO) {
             articleDao.getUnqualifiedArticles()
         }
@@ -48,6 +75,35 @@ class QualifyArticlesUseCase(
         if (articles.isEmpty()) {
             emit("Aucun article à qualifier.")
             return@flow
+        }
+
+        // Determine AI engine (Local AICore TPU vs Cloud Gemini API)
+        val engineSetting = withContext(Dispatchers.IO) { settingDao.getSettingValue("classification_engine") } ?: "aicore"
+        var useAiCore = false
+
+        if (engineSetting == "aicore") {
+            emit("Vérification d'Android AICore (TPU Pixel 10 Pro)...")
+            val status = aiCoreRepository.checkStatus()
+            when (status) {
+                is AiCoreStatus.Available -> {
+                    useAiCore = true
+                    emit("Classification locale sur TPU Pixel 10 Pro (Gemini Nano 4 Fast)")
+                }
+                is AiCoreStatus.Downloadable -> {
+                    emit("AICore : Modèle à télécharger -> Bascule automatique vers l'API Gemini Cloud")
+                }
+                is AiCoreStatus.Downloading -> {
+                    emit("AICore : Téléchargement en cours -> Bascule automatique vers l'API Gemini Cloud")
+                }
+                is AiCoreStatus.Unavailable -> {
+                    emit("AICore : Non disponible sur l'appareil -> Bascule automatique vers l'API Gemini Cloud")
+                }
+                is AiCoreStatus.Error -> {
+                    emit("AICore indisponible (${status.message}) -> Bascule automatique vers l'API Gemini Cloud")
+                }
+            }
+        } else {
+            emit("Classification distante via Google Gemini Cloud API...")
         }
 
         emit("Qualification de ${articles.size} articles...")
@@ -69,7 +125,6 @@ class QualifyArticlesUseCase(
                     isQualified = true
                 )
             } else if (minReadingTime > 0 && readingTimeValue < minReadingTime) {
-
                 article.copy(
                     aiInterest = false,
                     aiThemes = listOf("Exclus"),
@@ -77,10 +132,19 @@ class QualifyArticlesUseCase(
                     isQualified = true
                 )
             } else {
-
-                // Level 2: Gemini LLM Qualification
+                // Level 2: AI Qualification (AICore Local TPU with fallback to Gemini Cloud)
                 try {
-                    val qualification = geminiRepository.qualifyArticle(article, criteria, themes)
+                    val qualification = if (useAiCore) {
+                        try {
+                            aiCoreRepository.qualifyArticle(article, criteria, themes)
+                        } catch (e: Exception) {
+                            emit("Erreur TPU sur cet article -> Fallback API Gemini Cloud...")
+                            geminiRepository.qualifyArticle(article, criteria, themes)
+                        }
+                    } else {
+                        geminiRepository.qualifyArticle(article, criteria, themes)
+                    }
+
                     if (qualification != null) {
                         val isInteresting = qualification.interest
                         val assignedThemes = if (!isInteresting || qualification.themes.isEmpty()) {

@@ -13,6 +13,8 @@ import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
 import com.olivierbda.omnivigie.data.local.entities.SettingEntity
 import com.olivierbda.omnivigie.data.repository.GmailRepository
 import com.olivierbda.omnivigie.data.repository.GeminiRepository
+import com.olivierbda.omnivigie.data.repository.AiCoreRepository
+import com.olivierbda.omnivigie.data.repository.AiCoreStatus
 import com.olivierbda.omnivigie.data.repository.NotebookLmRepository
 import com.olivierbda.omnivigie.domain.usecase.CreateThemedNotebookUseCase
 import com.olivierbda.omnivigie.domain.usecase.QualifyArticlesUseCase
@@ -55,7 +57,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val authManager = AuthManager(application)
     private val gmailRepository = GmailRepository(emailDao, articleDao)
     private val geminiRepository = GeminiRepository(settingDao)
-    private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, settingDao, geminiRepository)
+    private val aiCoreRepository = AiCoreRepository()
+    private val qualifyArticlesUseCase = QualifyArticlesUseCase(application, articleDao, settingDao, geminiRepository, aiCoreRepository)
 
     
     private val sessionManager = SessionManager(application)
@@ -174,6 +177,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .map { it?.toIntOrNull() ?: 5 }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 5)
 
+    val articleRetentionDays: StateFlow<Int> = settingDao.getSetting("article_retention_days")
+        .map { it?.toIntOrNull() ?: 30 }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 30)
+
     val gmailFilter: StateFlow<String> = settingDao.getSetting("gmail_filter")
         .map { it ?: DEFAULT_FILTER }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DEFAULT_FILTER)
@@ -189,6 +196,52 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val geminiModel: StateFlow<String> = settingDao.getSetting("gemini_model")
         .map { it ?: com.olivierbda.omnivigie.BuildConfig.GEMINI_MODEL.ifBlank { "gemini-2.0-flash-lite" } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.olivierbda.omnivigie.BuildConfig.GEMINI_MODEL.ifBlank { "gemini-2.0-flash-lite" })
+
+    val classificationEngine: StateFlow<String> = settingDao.getSetting("classification_engine")
+        .map { it ?: "aicore" }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "aicore")
+
+    fun updateClassificationEngine(engine: String) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("classification_engine", engine))
+            refreshAiCoreStatus()
+        }
+    }
+
+    private val _aiCoreStatus = MutableStateFlow<AiCoreStatus>(AiCoreStatus.Unavailable)
+    val aiCoreStatus: StateFlow<AiCoreStatus> = _aiCoreStatus.asStateFlow()
+
+    private val _isTestingAiCore = MutableStateFlow(false)
+    val isTestingAiCore = _isTestingAiCore.asStateFlow()
+
+    private val _aiCoreTestResult = MutableStateFlow<String?>(null)
+    val aiCoreTestResult = _aiCoreTestResult.asStateFlow()
+
+    fun refreshAiCoreStatus() {
+        viewModelScope.launch {
+            _aiCoreStatus.value = aiCoreRepository.checkStatus()
+        }
+    }
+
+    fun testAiCoreConnection() {
+        viewModelScope.launch {
+            _isTestingAiCore.value = true
+            _aiCoreTestResult.value = null
+            try {
+                val response = aiCoreRepository.testConnection()
+                _aiCoreTestResult.value = "Succès TPU : $response"
+            } catch (e: Exception) {
+                val errorMsg = e.localizedMessage ?: e.message ?: "Erreur inconnue"
+                _aiCoreTestResult.value = "Échec TPU : $errorMsg"
+            } finally {
+                _isTestingAiCore.value = false
+            }
+        }
+    }
+
+    fun clearAiCoreTestResult() {
+        _aiCoreTestResult.value = null
+    }
 
     private val _isTestingLlm = MutableStateFlow(false)
     val isTestingLlm = _isTestingLlm.asStateFlow()
@@ -315,8 +368,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _authorizationPendingIntent = MutableStateFlow<PendingIntent?>(null)
     val authorizationPendingIntent = _authorizationPendingIntent.asStateFlow()
 
+    private var pendingFullProcessAfterAuth = false
+
     init {
         refreshNotebookStatus()
+        refreshAiCoreStatus()
     }
 
     fun refreshNotebookStatus() {
@@ -350,6 +406,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun syncGmail(activity: Activity) {
         viewModelScope.launch {
+            pendingFullProcessAfterAuth = false
             _syncStatus.value = "Authentification..."
             val credential = authManager.signIn(activity)
             if (credential == null) {
@@ -379,7 +436,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val result = authManager.getAuthorizationResult(activity, data)
                 if (result.accessToken != null) {
+                    val wasFullProcess = pendingFullProcessAfterAuth
+                    pendingFullProcessAfterAuth = false
                     startSync(result.accessToken!!)
+                    if (wasFullProcess) {
+                        excludeOldArticles()
+                        qualifyArticles()
+                    }
                 } else {
                     _syncStatus.value = "Autorisation Gmail refusée"
                 }
@@ -394,6 +457,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     
     fun syncAndProcessVeille(activity: Activity) {
         viewModelScope.launch {
+            pendingFullProcessAfterAuth = true
             showProcessingOverlay("Veille Technologique (Gmail & IA)")
             _syncStatus.value = "Authentification Gmail..."
             val credential = authManager.signIn(activity)
@@ -415,7 +479,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _syncStatus.value = "Action requise : Autorisez l'accès à Gmail"
                 _authorizationPendingIntent.value = authResult.pendingIntent
             } else {
+                pendingFullProcessAfterAuth = false
                 startSync(authResult.accessToken!!)
+                excludeOldArticles()
                 qualifyArticles()
             }
         }
@@ -484,6 +550,35 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateArticleRetentionDays(days: Int) {
+        viewModelScope.launch {
+            settingDao.insertSetting(SettingEntity("article_retention_days", days.toString()))
+        }
+    }
+
+    suspend fun excludeOldArticles(): Int {
+        _syncStatus.value = "Vérification de l'ancienneté des articles..."
+        val retentionDays = articleRetentionDays.value
+        if (retentionDays <= 0) return 0
+        val cutoffTimestamp = System.currentTimeMillis() - (retentionDays.toLong() * 24L * 60L * 60L * 1000L)
+        val oldArticles = articleDao.getArticlesOlderThan(cutoffTimestamp)
+        if (oldArticles.isNotEmpty()) {
+            val updated = oldArticles.map {
+                it.copy(
+                    aiInterest = false,
+                    aiThemes = listOf("Exclus"),
+                    aiExplanation = "Article trop ancien (> $retentionDays jours).",
+                    isQualified = true
+                )
+            }
+            articleDao.updateArticles(updated)
+            _syncStatus.value = "${updated.size} article(s) trop ancien(s) (> $retentionDays j) exclus"
+            kotlinx.coroutines.delay(1000)
+            return updated.size
+        }
+        return 0
+    }
+
     fun clearData() {
         viewModelScope.launch {
             try {
@@ -541,5 +636,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _syncStatus.value = "Erreur lors du nettoyage"
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        aiCoreRepository.close()
     }
 }

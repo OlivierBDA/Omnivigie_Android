@@ -49,6 +49,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.olivierbda.omnivigie.data.local.entities.ArticleEntity
+import com.olivierbda.omnivigie.data.repository.AiCoreStatus
 import com.olivierbda.omnivigie.ui.theme.*
 import com.olivierbda.omnivigie.ui.viewmodel.HomeViewModel
 import com.olivierbda.omnivigie.ui.auth.NotebookAuthActivity
@@ -460,6 +461,7 @@ fun ArticleCard(article: ArticleEntity) {
                         !article.isQualified -> Icons.Default.QuestionMark to TextSecondary
                         article.aiExplanation?.contains("Publicité", ignoreCase = true) == true -> Icons.Default.Block to SystemRed
                         article.aiExplanation?.contains("trop court", ignoreCase = true) == true -> Icons.Default.HourglassEmpty to CosmicTertiary
+                        article.aiExplanation?.contains("trop ancien", ignoreCase = true) == true -> Icons.Default.Schedule to CosmicTertiary
                         article.aiInterest == true -> Icons.Default.PriorityHigh to CosmicTertiary
                         else -> Icons.Default.Close to SystemRed
                     }
@@ -525,6 +527,11 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
     val qualificationCriteria by viewModel.qualificationCriteria.collectAsState()
     val qualificationThemes by viewModel.qualificationThemes.collectAsState()
     val minReadingTime by viewModel.minReadingTime.collectAsState()
+    val articleRetentionDays by viewModel.articleRetentionDays.collectAsState()
+    val classificationEngine by viewModel.classificationEngine.collectAsState()
+    val aiCoreStatus by viewModel.aiCoreStatus.collectAsState()
+    val isTestingAiCore by viewModel.isTestingAiCore.collectAsState()
+    val aiCoreTestResult by viewModel.aiCoreTestResult.collectAsState()
     val geminiApiKey by viewModel.geminiApiKey.collectAsState()
     val geminiModel by viewModel.geminiModel.collectAsState()
     val isTestingLlm by viewModel.isTestingLlm.collectAsState()
@@ -533,9 +540,11 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
     var showCriteriaDialog by remember { mutableStateOf(false) }
     var showAddThemeDialog by remember { mutableStateOf(false) }
     var showDatePickerDialog by remember { mutableStateOf(false) }
+    var showCustomRetentionDialog by remember { mutableStateOf(false) }
     var showClearDataConfirmDialog by remember { mutableStateOf(false) }
     var newThemeInput by remember { mutableStateOf("") }
     var criteriaEditInput by remember { mutableStateOf("") }
+    var customRetentionInput by remember(articleRetentionDays) { mutableStateOf(articleRetentionDays.toString()) }
     var apiKeyInput by remember(geminiApiKey) { mutableStateOf(geminiApiKey) }
     var modelInput by remember(geminiModel) { mutableStateOf(geminiModel) }
     var isApiKeyVisible by remember { mutableStateOf(false) }
@@ -622,10 +631,110 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
             }
         }
 
-        // 2. Configuration du Modèle LLM (Google Gemini)
+        // 2. Rétention des Articles (Exclusion automatique)
         item {
             Text(
-                text = "Configuration du Modèle LLM (Gemini)",
+                text = "Rétention des Articles (Exclusion)",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextAccent,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Durée de rétention des articles :",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "$articleRetentionDays jours",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = CosmicPrimary
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val options = listOf(7, 14, 30, 60)
+                        options.forEach { days ->
+                            val isSelected = articleRetentionDays == days
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.updateArticleRetentionDays(days) },
+                                label = {
+                                    Text(
+                                        text = "$days j",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                    )
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = CosmicPrimary,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = CosmicSurfaceVariant,
+                                    labelColor = TextPrimary
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = {
+                                customRetentionInput = articleRetentionDays.toString()
+                                showCustomRetentionDialog = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = CosmicTertiary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Durée personnalisée...",
+                                color = CosmicTertiary,
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = "Les articles de plus de $articleRetentionDays jours seront automatiquement reclassés dans la catégorie « Exclus » lors du lancement de « Sync & Traiter la veille ».",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CosmicTertiary
+                    )
+                }
+            }
+        }
+
+        // 3. Moteur de Classification (Local TPU vs Cloud Gemini API)
+        item {
+            Text(
+                text = "Moteur de Classification des Articles",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextAccent,
                 fontWeight = FontWeight.Bold
@@ -643,7 +752,201 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Text(
-                        text = "Paramètres de connexion à l'API Gemini pour la qualification et la suggestion d'articles :",
+                        text = "Sélectionnez le moteur d'IA pour qualifier vos articles de veille :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = classificationEngine == "aicore",
+                            onClick = { viewModel.updateClassificationEngine("aicore") },
+                            label = {
+                                Text(
+                                    text = "⚡ TPU Pixel 10 (Local)",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (classificationEngine == "aicore") FontWeight.Bold else FontWeight.Normal
+                                    )
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CosmicPrimary,
+                                selectedLabelColor = Color.White,
+                                containerColor = CosmicSurfaceVariant,
+                                labelColor = TextPrimary
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        FilterChip(
+                            selected = classificationEngine == "gemini_cloud",
+                            onClick = { viewModel.updateClassificationEngine("gemini_cloud") },
+                            label = {
+                                Text(
+                                    text = "☁️ API Cloud (Distant)",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (classificationEngine == "gemini_cloud") FontWeight.Bold else FontWeight.Normal
+                                    )
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = CosmicPrimary,
+                                selectedLabelColor = Color.White,
+                                containerColor = CosmicSurfaceVariant,
+                                labelColor = TextPrimary
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    // Carte d'état Android AICore
+                    Surface(
+                        color = CosmicSurfaceVariant,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Android AICore (Google Tensor)",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = TextPrimary
+                                )
+
+                                val (statusText, statusColor) = when (aiCoreStatus) {
+                                    is AiCoreStatus.Available -> "Disponible" to SystemGreen
+                                    is AiCoreStatus.Downloadable -> "À télécharger" to SystemOrange
+                                    is AiCoreStatus.Downloading -> "Téléchargement" to SystemOrange
+                                    is AiCoreStatus.Unavailable -> "Indisponible" to SystemRed
+                                    is AiCoreStatus.Error -> "Erreur" to SystemRed
+                                }
+
+                                Surface(
+                                    color = statusColor.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, statusColor)
+                                ) {
+                                    Text(
+                                        text = statusText,
+                                        color = statusColor,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Text(
+                                text = "Modèle : Gemini Nano 4 Fast (E2B / Faible latence)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary
+                            )
+
+                            // Bouton tester TPU
+                            Button(
+                                onClick = { viewModel.testAiCoreConnection() },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(42.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CosmicBackground),
+                                shape = RoundedCornerShape(8.dp),
+                                enabled = !isTestingAiCore
+                            ) {
+                                if (isTestingAiCore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = CosmicTertiary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Test TPU en cours...", color = TextPrimary, style = MaterialTheme.typography.labelMedium)
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.FlashOn,
+                                        contentDescription = null,
+                                        tint = CosmicTertiary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Tester Gemini Nano (TPU)", color = TextPrimary, style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+
+                            aiCoreTestResult?.let { result ->
+                                val isSuccess = result.startsWith("Succès")
+                                Surface(
+                                    color = if (isSuccess) SystemGreen.copy(alpha = 0.15f) else SystemRed.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(6.dp),
+                                    border = BorderStroke(1.dp, if (isSuccess) SystemGreen else SystemRed),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = result,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (isSuccess) SystemGreen else SystemRed,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = { viewModel.clearAiCoreTestResult() },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Fermer",
+                                                tint = TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = "En mode local, si le TPU est indisponible, l'application bascule automatiquement sur l'API Gemini Cloud.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CosmicTertiary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Configuration du Modèle LLM Cloud (Google Gemini)
+        item {
+            Text(
+                text = "Configuration API Cloud (Gemini)",
+                style = MaterialTheme.typography.titleMedium,
+                color = TextAccent,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CosmicSurface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text(
+                        text = "Paramètres de connexion à l'API Gemini pour la suggestion de fiches NotebookLM et le fallback TPU :",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
@@ -1168,6 +1471,64 @@ fun SettingsTab(viewModel: HomeViewModel = viewModel()) {
             },
             dismissButton = {
                 TextButton(onClick = { showClearDataConfirmDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Dialog 5: Custom Retention Days Dialog
+    if (showCustomRetentionDialog) {
+        AlertDialog(
+            onDismissRequest = { showCustomRetentionDialog = false },
+            containerColor = CosmicSurface,
+            title = {
+                Text(
+                    text = "Durée de rétention des articles",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Indiquez le nombre de jours au-delà duquel un article est considéré trop ancien :",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                    OutlinedTextField(
+                        value = customRetentionInput,
+                        onValueChange = { input ->
+                            customRetentionInput = input.filter { it.isDigit() }
+                        },
+                        label = { Text("Nombre de jours") },
+                        singleLine = true,
+                        placeholder = { Text("30") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = CosmicPrimary,
+                            unfocusedBorderColor = CosmicSurfaceVariant,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val days = customRetentionInput.toIntOrNull() ?: 30
+                        if (days > 0) {
+                            viewModel.updateArticleRetentionDays(days)
+                        }
+                        showCustomRetentionDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = CosmicPrimary)
+                ) {
+                    Text("Enregistrer")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomRetentionDialog = false }) {
                     Text("Annuler", color = TextSecondary)
                 }
             }
